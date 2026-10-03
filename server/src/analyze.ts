@@ -8,6 +8,9 @@ import { findQuote, type GameSummary, type MarketKey } from "./odds.ts";
 import { expectedValue, impliedProbability, kellyFraction, round } from "./math.ts";
 
 const MODEL = "claude-opus-5-5";
+
+// Claude Opus 5.5 list prices (USD per million tokens) + web search ($10 / 1,000), for cost logging.
+const PRICE = { input: 4, cacheWrite: 5, cacheRead: 0.2, output: 20, perSearch: 0.01 };
 // Reads ANTHROPIC_API_KEY. Keys not scoped to a workspace (sk-ant-usr-...) must
 // also name one, via ANTHROPIC_WORKSPACE_ID.
 const client = new Anthropic({
@@ -19,7 +22,7 @@ const client = new Anthropic({
 const SYSTEM_PROMPT = `You are a disciplined, data-driven sports betting analyst. Your job is to find bets where the true win probability is higher than the odds imply - positive expected value - not simply the teams most likely to win.
 
 Process:
-1. Review every game you are given. Each market lists the best available price and a no-vig "fairProbability" from the market consensus.
+1. Scan every game you are given, then shortlist the 4-6 most promising ones to research. You have only about 8 searches, so search efficiently (one search can cover several games, e.g. "college football expert picks week 6") and skip games where the line looks efficient. Each market lists the best available price and a no-vig "fairProbability" from the market consensus.
 2. Research with web search before deciding. For each game worth a closer look, check same-day injuries, confirmed lineups/starters, rest and travel, weather for outdoor games, and recent form.
 3. Scour the web for expert analysis and picks for today's games (for example Action Network, Covers, ESPN, CBS Sports, The Athletic, VSiN, Pickswise, OddsShark, Dimers, and well-known handicappers). Note which side the experts favor, how lopsided the consensus is, and any public-betting vs. sharp-money splits you find. Fetch an article when a search snippet is not enough.
 4. Form your own probability estimate. Expert consensus is evidence, not the answer: popular public sides are often overpriced, and disagreeing with the experts is fine when your reasoning supports it. Say so when you do.
@@ -133,7 +136,7 @@ export interface Pick {
 export interface AnalysisResult {
   picks: Pick[];
   slateNotes: string;
-  usage: { inputTokens: number; outputTokens: number; webSearches: number; model: string };
+  usage: { inputTokens: number; outputTokens: number; webSearches: number; model: string; costUSD: number };
 }
 
 const MARKET_KEY: Record<Pick["market"], MarketKey> = {
@@ -155,10 +158,12 @@ export async function analyzeGames(sportKey: string, date: string, games: GameSu
 ${SPORT_NOTES[sportKey] ?? ""}
 
 Games and best available odds (American), with no-vig market probabilities:
-${JSON.stringify(games, null, 1)}`;
+${JSON.stringify(games)}`;
 
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: userPrompt }];
-  const usage = { inputTokens: 0, outputTokens: 0, webSearches: 0, model: MODEL };
+  const usage = { inputTokens: 0, outputTokens: 0, webSearches: 0, model: MODEL, costUSD: 0 };
+  let cacheRead = 0;
+  let cacheWrite = 0;
   let final: Anthropic.Beta.BetaMessage | undefined;
 
   // Web search runs server-side; a long research turn can come back as
@@ -170,19 +175,24 @@ ${JSON.stringify(games, null, 1)}`;
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       thinking: { type: "adaptive" },
+      // Each research step re-reads the whole conversation (games + search results);
+      // caching makes those re-reads ~20x cheaper.
+      cache_control: { type: "ephemeral" },
       output_config: {
         effort: "high",
         format: { type: "json_schema", schema: PICK_SCHEMA as unknown as Record<string, unknown> },
       },
       system: SYSTEM_PROMPT,
       tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: sportKey === "americanfootball_ncaaf" ? 45 : isFootball ? 35 : 25 },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: isFootball ? 15 : 10 },
+        { type: "web_search_20260209", name: "web_search", max_uses: Number(process.env.MAX_SEARCHES ?? 8) },
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 2 },
       ],
       messages,
     });
     const message = await stream.finalMessage();
     usage.inputTokens += message.usage.input_tokens;
+    cacheRead += message.usage.cache_read_input_tokens ?? 0;
+    cacheWrite += message.usage.cache_creation_input_tokens ?? 0;
     usage.outputTokens += message.usage.output_tokens;
     usage.webSearches += message.usage.server_tool_use?.web_search_requests ?? 0;
     usage.model = message.model;
@@ -206,9 +216,14 @@ ${JSON.stringify(games, null, 1)}`;
     .trim();
   const parsed = ModelOutput.parse(JSON.parse(text));
 
+  usage.costUSD = round(
+    (usage.inputTokens * PRICE.input + cacheWrite * PRICE.cacheWrite + cacheRead * PRICE.cacheRead +
+      usage.outputTokens * PRICE.output) / 1e6 + usage.webSearches * PRICE.perSearch,
+    2,
+  );
   console.log(
-    `[claude] ${sportKey} ${date}: ${usage.inputTokens} in / ${usage.outputTokens} out tokens, ` +
-      `${usage.webSearches} web searches, model ${usage.model}`,
+    `[claude] ${sportKey} ${date}: ${usage.inputTokens} in (+${cacheRead} cached read, ${cacheWrite} cache write) / ` +
+      `${usage.outputTokens} out tokens, ${usage.webSearches} web searches, model ${usage.model}, ~$${usage.costUSD}`,
   );
 
   const gamesById = new Map(games.map((g) => [g.eventId, g]));

@@ -5,7 +5,6 @@ enum SettingsKey {
     static let backendURL = "backendURL"
     static let appToken = "appToken"
     static let selectedSports = "selectedSports"
-    static let footballWeekWindow = "footballWeekWindow"
     static let bankroll = "bankroll"
     static let bankrollSetAt = "bankrollSetAt"
     static let riskLevel = "riskLevel"

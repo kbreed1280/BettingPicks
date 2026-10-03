@@ -12,6 +12,8 @@ struct SportSummary: Decodable, Identifiable {
     let gameCount: Int
     let slateNotes: String
     let generatedAt: String
+    let status: String?
+    let costUSD: Double?
     let error: String?
     var id: String { sport }
 }
@@ -102,8 +104,9 @@ struct APIClient {
         return (h.anthropicKey, h.oddsKey)
     }
 
-    /// Picks for the user's local day. Analysis can take a few minutes on a fresh slate.
-    func picks(sports: [String], day: Date = .now, footballWeek: Bool, refresh: Bool) async throws -> PicksResponse {
+    /// Picks for games on one local day. A fresh slate is analyzed in the background;
+    /// the response says "running" for that sport until it's done, so poll again.
+    func picks(sports: [String], day: Date, refresh: Bool) async throws -> PicksResponse {
         let cal = Calendar.current
         let start = cal.startOfDay(for: day)
         let end = cal.date(byAdding: .day, value: 1, to: start)!
@@ -113,9 +116,9 @@ struct APIClient {
             .init(name: "date", value: Self.dayKey(day)),
             .init(name: "from", value: iso.string(from: start)),
             .init(name: "to", value: iso.string(from: end)),
-            .init(name: "window", value: footballWeek ? "week" : "day"),
+            .init(name: "window", value: "day"),
             .init(name: "refresh", value: refresh ? "1" : "0"),
-        ], timeout: 900)
+        ], timeout: 60)
     }
 
     func scores(sports: [String]) async throws -> [ScoreDTO] {

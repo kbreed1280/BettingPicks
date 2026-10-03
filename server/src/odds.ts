@@ -17,6 +17,11 @@ export const SUPPORTED_SPORTS: Record<string, string> = {
   mma_mixed_martial_arts: "MMA",
 };
 
+/** Legal, regulated US sportsbooks (The Odds API keys). Offshore books are excluded:
+ *  their prices aren't available to most users. Override with SPORTSBOOKS. 10 books = 1 quota unit. */
+const SPORTSBOOKS = process.env.SPORTSBOOKS ??
+  "fanduel,draftkings,betmgm,williamhill_us,espnbet,betrivers,fanatics,hardrockbet,ballybet,betparx";
+
 export type MarketKey = "h2h" | "spreads" | "totals";
 
 interface RawOutcome { name: string; price: number; point?: number }
@@ -86,7 +91,7 @@ async function getJSON<T>(url: URL): Promise<T> {
 export async function fetchGames(sportKey: string, from: Date, to: Date): Promise<GameSummary[]> {
   const url = new URL(`${BASE}/sports/${sportKey}/odds`);
   url.searchParams.set("apiKey", apiKey());
-  url.searchParams.set("regions", "us");
+  url.searchParams.set("bookmakers", SPORTSBOOKS);
   url.searchParams.set("markets", "h2h,spreads,totals");
   url.searchParams.set("oddsFormat", "american");
   url.searchParams.set("commenceTimeFrom", isoNoMillis(from));

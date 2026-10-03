@@ -30,15 +30,16 @@ struct GameDTO: Decodable, Identifiable, Hashable {
 }
 
 extension APIClient {
-    func games(sports: [String], footballWeek: Bool) async throws -> [GameDTO] {
+    /// The next 7 days of games (one Odds API call per sport; the app filters by day).
+    func games(sports: [String]) async throws -> [GameDTO] {
         let start = Calendar.current.startOfDay(for: .now)
-        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        let end = Calendar.current.date(byAdding: .day, value: 7, to: start)!
         let iso = ISO8601DateFormatter()
         return try await get("/games", query: [
             .init(name: "sports", value: sports.joined(separator: ",")),
             .init(name: "from", value: iso.string(from: start)),
             .init(name: "to", value: iso.string(from: end)),
-            .init(name: "window", value: footballWeek ? "week" : "day"),
+            .init(name: "window", value: "week"),
         ])
     }
 }
@@ -63,7 +64,7 @@ extension BetDraft {
 /// Today's schedule (and the week's football) with the best line for each market.
 struct GamesView: View {
     @AppStorage(SettingsKey.selectedSports) private var selectedSports = SportOption.defaultKeys
-    @AppStorage(SettingsKey.footballWeekWindow) private var footballWeek = true
+    @State private var selectedDay = Calendar.current.startOfDay(for: .now)
     @Query private var picks: [AIPick]
 
     @State private var games: [GameDTO] = []
@@ -77,7 +78,8 @@ struct GamesView: View {
 
     private var visible: [GameDTO] {
         games.filter { g in
-            (leagueFilter == "All" || g.league == leagueFilter)
+            Calendar.current.isDate(g.startTime, inSameDayAs: selectedDay)
+                && (leagueFilter == "All" || g.league == leagueFilter)
                 && (search.isEmpty || g.homeTeam.localizedCaseInsensitiveContains(search)
                     || g.awayTeam.localizedCaseInsensitiveContains(search))
         }
@@ -88,6 +90,24 @@ struct GamesView: View {
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
             }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    ForEach(days, id: \.self) { day in
+                        let count = games.filter { Calendar.current.isDate($0.startTime, inSameDayAs: day) }.count
+                        Button { selectedDay = day } label: {
+                            VStack(spacing: 2) {
+                                Text(dayTitle(day)).font(.caption.weight(.semibold))
+                                Text("\(count) games").font(.caption2)
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(Calendar.current.isDate(day, inSameDayAs: selectedDay) ? .accentColor : .secondary)
+                    }
+                }
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
             if Set(games.map(\.league)).count > 1 {
                 Picker("League", selection: $leagueFilter) {
                     Text("All").tag("All")
@@ -97,10 +117,10 @@ struct GamesView: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             }
-            let byDay = Dictionary(grouping: visible) { Calendar.current.startOfDay(for: $0.startTime) }
-            ForEach(byDay.keys.sorted(), id: \.self) { day in
-                Section(dayTitle(day)) {
-                    ForEach(byDay[day] ?? []) { game in
+            let byLeague = Dictionary(grouping: visible, by: \.league)
+            ForEach(byLeague.keys.sorted(), id: \.self) { league in
+                Section(SportOption.displayName(league: league)) {
+                    ForEach(byLeague[league] ?? []) { game in
                         GameRow(game: game, hasAIPick: aiPickEvents.contains(game.eventId)) { type, quote in
                             draft = BetDraft(game: game, betType: type, quote: quote)
                         }
@@ -112,9 +132,9 @@ struct GamesView: View {
         .overlay {
             if loading && games.isEmpty {
                 ProgressView("Loading games…")
-            } else if !loading && games.isEmpty && error == nil {
+            } else if !loading && visible.isEmpty && error == nil {
                 ContentUnavailableView("No games found", systemImage: "sportscourt",
-                                       description: Text("No upcoming games with odds for your sports. Change sports in Settings."))
+                                       description: Text("No games with odds on this day for your sports."))
             }
         }
         .refreshable { await load() }
@@ -128,12 +148,16 @@ struct GamesView: View {
         loading = true
         defer { loading = false }
         do {
-            games = try await APIClient().games(sports: selectedSports.split(separator: ",").map(String.init),
-                                                footballWeek: footballWeek)
+            games = try await APIClient().games(sports: selectedSports.split(separator: ",").map(String.init))
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private var days: [Date] {
+        let today = Calendar.current.startOfDay(for: .now)
+        return (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: today)! }
     }
 
     private func dayTitle(_ day: Date) -> String {

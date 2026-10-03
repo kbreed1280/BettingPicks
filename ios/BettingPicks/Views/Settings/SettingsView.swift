@@ -7,7 +7,6 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.backendURL) private var backendURL = Defaults.backendURL
     @AppStorage(SettingsKey.appToken) private var appToken = Defaults.appToken
     @AppStorage(SettingsKey.selectedSports) private var selectedSports = SportOption.defaultKeys
-    @AppStorage(SettingsKey.footballWeekWindow) private var footballWeekWindow = true
     @Query private var allBets: [Bet]
     @AppStorage(SettingsKey.bankroll) private var bankroll = 0.0
     @AppStorage(SettingsKey.bankrollSetAt) private var bankrollSetAt = 0.0
@@ -36,11 +35,10 @@ struct SettingsView: View {
                             }
                         ))
                     }
-                    Toggle("Football: include the whole week", isOn: $footballWeekWindow)
                 } header: {
                     Text("Sports to analyze")
                 } footer: {
-                    Text("NFL and college football are weekly, so this shows the next 7 days of football games instead of just today's. Each extra sport costs more API credits.")
+                    Text("Picks only analyze sports that have games on the day you choose. Each sport with games that day is one AI analysis.")
                 }
 
                 Section {

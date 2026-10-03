@@ -1,122 +1,171 @@
 import SwiftData
 import SwiftUI
 
+/// Today's or tomorrow's picks, grouped by league. Nothing is analyzed until you
+/// tap "Get picks", because each new slate uses Claude credits.
 struct PicksView: View {
+    @State private var dayOffset = 0
+
+    private var day: Date {
+        Calendar.current.date(byAdding: .day, value: dayOffset, to: Calendar.current.startOfDay(for: .now))!
+    }
+
+    var body: some View {
+        NavigationStack {
+            PicksDayList(day: day, dayOffset: $dayOffset)
+                .id(dayOffset)
+                .navigationTitle("AI Picks")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        NavigationLink { PickHistoryView() } label: { Label("History", systemImage: "clock.arrow.circlepath") }
+                    }
+                }
+        }
+    }
+}
+
+private struct PicksDayList: View {
+    let day: Date
+    @Binding var dayOffset: Int
+
     @Environment(\.modelContext) private var context
     @Environment(PickStore.self) private var store
-    @Query private var todaysPicks: [AIPick]
+    @Query private var picks: [AIPick]
     @Query private var bets: [Bet]
     @State private var addingFrom: AIPick?
 
+    @AppStorage(SettingsKey.selectedSports) private var selectedSports = SportOption.defaultKeys
     @AppStorage(SettingsKey.bankroll) private var bankroll = 0.0
     @AppStorage(SettingsKey.bankrollSetAt) private var bankrollSetAt = 0.0
     @AppStorage(SettingsKey.adjustBankroll) private var adjustBankroll = true
     @AppStorage(SettingsKey.riskLevel) private var riskRaw = RiskLevel.moderate.rawValue
     @State private var bankrollEntry: Double?
 
+    init(day: Date, dayOffset: Binding<Int>) {
+        self.day = day
+        _dayOffset = dayOffset
+        let start = day
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: day)!
+        // Filter by kickoff time, so each day only shows games played that day.
+        _picks = Query(filter: #Predicate<AIPick> { $0.startTime >= start && $0.startTime < end },
+                       sort: [SortDescriptor(\.edge, order: .reverse)])
+    }
+
+    private var dayKey: String { APIClient.dayKey(day) }
     private var risk: RiskLevel { RiskLevel(rawValue: riskRaw) ?? .moderate }
     private var currentBankroll: Double {
         Bankroll.current(starting: bankroll, setAt: Date(timeIntervalSince1970: bankrollSetAt),
                          adjustWithResults: adjustBankroll, bets: bets)
     }
     private var stakes: [String: Double] {
-        StakeSizer.stakes(for: todaysPicks, bankroll: currentBankroll, risk: risk)
+        StakeSizer.stakes(for: picks, bankroll: currentBankroll, risk: risk)
     }
+    private var summaries: [SportSummary] { store.summaries[dayKey] ?? [] }
+    private var isLoading: Bool { store.loadingDay == dayKey }
+    private var dayName: String { dayOffset == 0 ? "today" : "tomorrow" }
 
-    init() {
-        let today = APIClient.dayKey(.now)
-        _todaysPicks = Query(filter: #Predicate<AIPick> { $0.slateDate == today },
-                             sort: [SortDescriptor(\.edge, order: .reverse)])
+    /// Leagues in the order you picked them in Settings.
+    private var leagues: [String] {
+        let order = SportOption.all.map(\.name)
+        return Array(Set(picks.map(\.league))).sorted {
+            (order.firstIndex(of: SportOption.displayName(league: $0)) ?? 99) < (order.firstIndex(of: SportOption.displayName(league: $1)) ?? 99)
+        }
     }
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
+            Section {
+                Picker("Day", selection: $dayOffset) {
+                    Text("Today").tag(0)
+                    Text("Tomorrow").tag(1)
+                }
+                .pickerStyle(.segmented)
+                Label("AI analysis, not a guarantee. Bet responsibly.", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            bankrollSection
+
+            if isLoading {
                 Section {
-                    Label("AI analysis, not a guarantee. Bet responsibly.", systemImage: "info.circle")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                bankrollSection
-
-                if store.isLoading {
-                    Section {
-                        HStack(spacing: 12) {
-                            ProgressView()
-                            VStack(alignment: .leading) {
-                                Text("Analyzing the slate…").font(.subheadline.weight(.semibold))
-                                Text("Claude is checking odds, injuries, news and expert picks. A fresh slate can take a few minutes.")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-
-                if let error = store.errorMessage {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
-                }
-
-                let best = todaysPicks.filter { $0.tier == "best" }
-                let leans = todaysPicks.filter { $0.tier != "best" }
-                if !best.isEmpty {
-                    Section("Best picks") { cards(best) }
-                }
-                if !leans.isEmpty {
-                    Section("Leans · smaller edges") { cards(leans) }
-                }
-
-                if !store.sportSummaries.isEmpty {
-                    Section("Slate notes") {
-                        ForEach(store.sportSummaries) { s in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(s.league) · \(s.gameCount) games").font(.subheadline.weight(.semibold))
-                                if let err = s.error {
-                                    Text(err).font(.caption).foregroundStyle(.red)
-                                } else if !s.slateNotes.isEmpty {
-                                    Text(s.slateNotes).font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        VStack(alignment: .leading) {
+                            Text(store.progress ?? "Analyzing…").font(.subheadline.weight(.semibold))
+                            Text("Claude is checking odds, injuries, news and expert picks. This can take 5–10 minutes. You can leave this screen; it keeps going.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
             }
-            .overlay {
-                if todaysPicks.isEmpty && !store.isLoading && store.errorMessage == nil {
-                    ContentUnavailableView {
-                        Label("No picks yet", systemImage: "sparkles")
-                    } description: {
-                        Text(store.lastLoaded == nil
-                             ? "Get today's AI picks for your sports."
-                             : "No bets with a real edge today. Sitting out is a valid pick.")
-                    } actions: {
-                        Button("Get picks") { Task { await store.load(context: context, refresh: false) } }
-                            .buttonStyle(.borderedProminent)
+
+            if let error = store.errors[dayKey] {
+                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
+            }
+
+            ForEach(leagues, id: \.self) { league in
+                let leaguePicks = picks.filter { $0.league == league }
+                let best = leaguePicks.filter { $0.tier == "best" }
+                let leans = leaguePicks.filter { $0.tier != "best" }
+                Section {
+                    cards(best)
+                    if !leans.isEmpty {
+                        Text("Leans · smaller edges").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        cards(leans)
+                    }
+                } header: {
+                    Text("\(SportOption.displayName(league: league)) · \(leaguePicks.count) pick\(leaguePicks.count == 1 ? "" : "s")")
+                }
+            }
+
+            if !summaries.isEmpty {
+                Section("Slate notes") {
+                    ForEach(summaries) { s in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("\(SportOption.displayName(league: s.league)) · \(s.gameCount) games").font(.subheadline.weight(.semibold))
+                                Spacer()
+                                if let cost = s.costUSD { Text("cost \(Format.money(cost))").font(.caption2).foregroundStyle(.secondary) }
+                            }
+                            if let err = s.error {
+                                Text(err).font(.caption).foregroundStyle(.red)
+                            } else if !s.slateNotes.isEmpty {
+                                Text(s.slateNotes).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
-            .navigationTitle("AI Picks")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink { PickHistoryView() } label: { Label("History", systemImage: "clock.arrow.circlepath") }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await store.load(context: context, refresh: true) } } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+
+            if !isLoading {
+                Section {
+                    Button {
+                        Task { await store.load(day: day, context: context, refresh: !picks.isEmpty || !summaries.isEmpty) }
+                    } label: {
+                        Label(picks.isEmpty && summaries.isEmpty ? "Get picks for \(dayName)" : "Re-analyze \(dayName)",
+                              systemImage: picks.isEmpty && summaries.isEmpty ? "sparkles" : "arrow.clockwise")
                     }
-                    .disabled(store.isLoading)
+                } footer: {
+                    Text("Only analyzes games played \(dayName) for: \(sportNames). Sports with no games \(dayName) cost nothing. Each new analysis uses Claude credits; results are saved, and re-analyzing within 2 hours just returns the saved picks.")
                 }
-            }
-            .task {
-                if todaysPicks.isEmpty && store.lastLoaded == nil && !store.isLoading {
-                    await store.load(context: context, refresh: false)
-                }
-                await store.settle(context: context)
-            }
-            .sheet(item: $addingFrom) { pick in
-                BetFormView(draft: BetDraft(pick: pick, stake: stakes[pick.pickID])) { _ in pick.addedToTracker = true }
             }
         }
+        .overlay {
+            if picks.isEmpty && !isLoading && store.errors[dayKey] == nil && !summaries.isEmpty {
+                ContentUnavailableView("No picks \(dayName)", systemImage: "hand.raised",
+                                       description: Text("No bets with a real edge. Sitting out is a valid pick."))
+            }
+        }
+        .task { await store.settle(context: context) }
+        .sheet(item: $addingFrom) { pick in
+            BetFormView(draft: BetDraft(pick: pick, stake: stakes[pick.pickID])) { _ in pick.addedToTracker = true }
+        }
+    }
+
+    private var sportNames: String {
+        let keys = Set(selectedSports.split(separator: ",").map(String.init))
+        return SportOption.all.filter { keys.contains($0.key) }.map(\.name).joined(separator: ", ")
     }
 
     private func cards(_ picks: [AIPick]) -> some View {
@@ -159,8 +208,8 @@ struct PicksView: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("Today's plan · \(risk.displayName)").font(.caption).foregroundStyle(.secondary)
-                        Text(todaysPicks.isEmpty ? "—" : "\(Format.money(total)) on \(stakes.values.filter { $0 > 0 }.count) bets")
+                        Text("\(dayOffset == 0 ? "Today" : "Tomorrow")'s plan · \(risk.displayName)").font(.caption).foregroundStyle(.secondary)
+                        Text(picks.isEmpty ? "—" : "\(Format.money(total)) on \(stakes.values.filter { $0 > 0 }.count) bets")
                             .font(.headline.monospacedDigit())
                     }
                 }

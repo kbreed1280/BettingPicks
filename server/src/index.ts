@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { analyzeGames, type Pick } from "./analyze.ts";
 import { getCached, setCached } from "./cache.ts";
+import { extractBets } from "./importer.ts";
 import { fetchGames, fetchScores, SUPPORTED_SPORTS, type GameSummary } from "./odds.ts";
 
 interface SportPicks {
@@ -11,10 +12,19 @@ interface SportPicks {
   gameCount: number;
   slateNotes: string;
   picks: Pick[];
+  /** "running" while Claude is still analyzing; the app polls until "done". */
+  status: "running" | "done" | "error";
+  costUSD?: number;
   error?: string;
 }
 
+/** Re-running a slate costs real money; ignore refreshes more often than this. */
+const REFRESH_COOLDOWN_MS = Number(process.env.REFRESH_COOLDOWN_MIN ?? 120) * 60 * 1000;
+/** How long a request waits for a running analysis before telling the app to poll. */
+const WAIT_MS = 20_000;
+
 const app = express();
+app.use(express.json({ limit: "15mb" })); // screenshot uploads
 
 // Shared secret so a stranger who finds the URL can't spend your API credits.
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -26,6 +36,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
+    spentTodayUSD: Number(spentToday().toFixed(2)),
+    dailyBudgetUSD: DAILY_BUDGET_USD,
     anthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
     oddsKey: Boolean(process.env.ODDS_API_KEY),
   });
@@ -35,33 +47,75 @@ app.get("/sports", (_req, res) => {
   res.json(Object.entries(SUPPORTED_SPORTS).map(([key, name]) => ({ key, name })));
 });
 
-// Same day+sport requested twice at once shares one analysis.
+// Analyses run in the background: a slate can take 5-15 minutes, longer than
+// Railway's proxy will hold a request open. Same day+sport shares one job.
 const inFlight = new Map<string, Promise<SportPicks>>();
 
-async function picksForSport(sport: string, date: string, from: Date, to: Date, refresh: boolean, window: string): Promise<SportPicks> {
-  const key = `${date}:${sport}:${window}`;
-  const cached = getCached<SportPicks>(key);
-  if (cached && !refresh) return cached;
+// Hard spending cap. Each analysis's cost is recorded; once today's total (UTC day)
+// reaches DAILY_BUDGET_USD, no new analyses start until tomorrow.
+const DAILY_BUDGET_USD = Number(process.env.DAILY_BUDGET_USD ?? 2);
+
+function spentToday(): number {
+  return getCached<number>(`${new Date().toISOString().slice(0, 10)}:spend`) ?? 0;
+}
+
+function recordSpend(usd: number): void {
+  const key = `${new Date().toISOString().slice(0, 10)}:spend`;
+  setCached(key, spentToday() + usd);
+}
+
+function startAnalysis(key: string, sport: string, date: string, from: Date, to: Date): Promise<SportPicks> {
   const running = inFlight.get(key);
   if (running) return running;
-
-  const job = (async () => {
+  if (spentToday() >= DAILY_BUDGET_USD) {
+    return Promise.resolve({
+      sport, league: SUPPORTED_SPORTS[sport], date, generatedAt: new Date().toISOString(), gameCount: 0,
+      slateNotes: "", picks: [], status: "error",
+      error: `Daily AI budget of $${DAILY_BUDGET_USD.toFixed(2)} reached ($${spentToday().toFixed(2)} spent). Resets tomorrow; change DAILY_BUDGET_USD in Railway to adjust.`,
+    });
+  }
+  const job = (async (): Promise<SportPicks> => {
     const league = SUPPORTED_SPORTS[sport];
     const games = (await fetchGames(sport, from, to)).filter((g) => new Date(g.startTime) > new Date());
-    const base = { sport, league, date, generatedAt: new Date().toISOString(), gameCount: games.length };
+    const base = { sport, league, date, generatedAt: new Date().toISOString(), gameCount: games.length, status: "done" as const };
     if (games.length === 0) {
       const empty = { ...base, slateNotes: "No upcoming games with odds.", picks: [] };
       setCached(key, empty);
       return empty;
     }
     const result = await analyzeGames(sport, date, games);
-    const value = { ...base, slateNotes: result.slateNotes, picks: result.picks };
+    recordSpend(result.usage.costUSD);
+    const value = { ...base, slateNotes: result.slateNotes, picks: result.picks, costUSD: result.usage.costUSD };
     setCached(key, value);
     return value;
-  })().finally(() => inFlight.delete(key));
+  })()
+    .catch((err: Error): SportPicks => {
+      console.error(`[picks] ${sport} failed:`, err);
+      return {
+        sport, league: SUPPORTED_SPORTS[sport], date, generatedAt: new Date().toISOString(),
+        gameCount: 0, slateNotes: "", picks: [], status: "error", error: err.message,
+      };
+    })
+    .finally(() => setTimeout(() => inFlight.delete(key), 60_000)); // let pollers see the result
 
   inFlight.set(key, job);
   return job;
+}
+
+async function picksForSport(sport: string, date: string, from: Date, to: Date, refresh: boolean, window: string): Promise<SportPicks> {
+  const key = `${date}:${sport}:${window}`;
+  const cached = getCached<SportPicks>(key);
+  const fresh = cached && Date.now() - new Date(cached.generatedAt).getTime() < REFRESH_COOLDOWN_MS;
+  const job = inFlight.get(key) ?? (cached && (!refresh || fresh) ? undefined : startAnalysis(key, sport, date, from, to));
+  if (!job) return { ...cached!, status: "done" };
+
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), WAIT_MS));
+  const result = await Promise.race([job, timeout]);
+  if (result) return result;
+  return {
+    sport, league: SUPPORTED_SPORTS[sport], date, generatedAt: new Date().toISOString(), gameCount: 0,
+    slateNotes: "", picks: cached?.picks ?? [], status: "running",
+  };
 }
 
 function parseSports(raw: unknown): string[] {
@@ -90,13 +144,7 @@ app.get("/picks/today", async (req, res) => {
       const football = sport.startsWith("americanfootball_");
       const window = weekWindow && football ? "week" : "day";
       const end = window === "week" ? new Date(from.getTime() + 7 * 864e5) : to;
-      return picksForSport(sport, date, from, end, refresh, window).catch((err: Error): SportPicks => {
-        console.error(`[picks] ${sport} failed:`, err);
-        return {
-          sport, league: SUPPORTED_SPORTS[sport], date, generatedAt: new Date().toISOString(),
-          gameCount: 0, slateNotes: "", picks: [], error: err.message,
-        };
-      });
+      return picksForSport(sport, date, from, end, refresh, window);
     }),
   );
 
@@ -127,6 +175,22 @@ app.get("/games", async (req, res) => {
     }));
     res.json(all.flat().sort((a, b) => a.startTime.localeCompare(b.startTime)));
   } catch (err) {
+    res.status(502).json({ error: (err as Error).message });
+  }
+});
+
+// POST /import/screenshot  {"image": "<base64>", "mediaType": "image/jpeg"}
+// Reads a sportsbook "My Bets" screenshot and returns the bets on it.
+app.post("/import/screenshot", async (req, res) => {
+  const { image, mediaType } = req.body ?? {};
+  if (typeof image !== "string" || !["image/jpeg", "image/png", "image/webp"].includes(mediaType)) {
+    res.status(400).json({ error: "Send {image: base64, mediaType: image/jpeg|image/png|image/webp}" });
+    return;
+  }
+  try {
+    res.json(await extractBets(image, mediaType));
+  } catch (err) {
+    console.error("[import] failed:", err);
     res.status(502).json({ error: (err as Error).message });
   }
 });

@@ -51,6 +51,15 @@ struct SportOption: Identifiable, Hashable {
 
     static let defaultKeys = "americanfootball_nfl,americanfootball_ncaaf"
 
+    /// The backend's short league label ("NCAAF") as shown in the app ("College Football").
+    static func displayName(league: String) -> String {
+        switch league {
+        case "NCAAF": "College Football"
+        case "NCAAB": "College Basketball"
+        default: league
+        }
+    }
+
     /// Short labels used when logging bets by hand.
     static let trackerLeagues = ["NFL", "NCAAF", "NBA", "WNBA", "NCAAB", "MLB", "NHL", "Soccer", "MMA", "Golf", "Tennis", "Other"]
 }
