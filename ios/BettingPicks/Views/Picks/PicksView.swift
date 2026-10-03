@@ -5,7 +5,23 @@ struct PicksView: View {
     @Environment(\.modelContext) private var context
     @Environment(PickStore.self) private var store
     @Query private var todaysPicks: [AIPick]
+    @Query private var bets: [Bet]
     @State private var addingFrom: AIPick?
+
+    @AppStorage(SettingsKey.bankroll) private var bankroll = 0.0
+    @AppStorage(SettingsKey.bankrollSetAt) private var bankrollSetAt = 0.0
+    @AppStorage(SettingsKey.adjustBankroll) private var adjustBankroll = true
+    @AppStorage(SettingsKey.riskLevel) private var riskRaw = RiskLevel.moderate.rawValue
+    @State private var bankrollEntry: Double?
+
+    private var risk: RiskLevel { RiskLevel(rawValue: riskRaw) ?? .moderate }
+    private var currentBankroll: Double {
+        Bankroll.current(starting: bankroll, setAt: Date(timeIntervalSince1970: bankrollSetAt),
+                         adjustWithResults: adjustBankroll, bets: bets)
+    }
+    private var stakes: [String: Double] {
+        StakeSizer.stakes(for: todaysPicks, bankroll: currentBankroll, risk: risk)
+    }
 
     init() {
         let today = APIClient.dayKey(.now)
@@ -21,6 +37,8 @@ struct PicksView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                bankrollSection
 
                 if store.isLoading {
                     Section {
@@ -64,7 +82,7 @@ struct PicksView: View {
                 }
             }
             .overlay {
-                if todaysPicks.isEmpty && !store.isLoading {
+                if todaysPicks.isEmpty && !store.isLoading && store.errorMessage == nil {
                     ContentUnavailableView {
                         Label("No picks yet", systemImage: "sparkles")
                     } description: {
@@ -96,20 +114,67 @@ struct PicksView: View {
                 await store.settle(context: context)
             }
             .sheet(item: $addingFrom) { pick in
-                BetFormView(draft: BetDraft(pick: pick)) { _ in pick.addedToTracker = true }
+                BetFormView(draft: BetDraft(pick: pick, stake: stakes[pick.pickID])) { _ in pick.addedToTracker = true }
             }
         }
     }
 
     private func cards(_ picks: [AIPick]) -> some View {
-        ForEach(picks) { pick in
-            PickCard(pick: pick) { addingFrom = pick }
+        let stakes = stakes
+        return ForEach(picks) { pick in
+            PickCard(pick: pick, stake: stakes[pick.pickID]) { addingFrom = pick }
+        }
+    }
+
+    @ViewBuilder private var bankrollSection: some View {
+        if bankroll <= 0 {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("How much do you have to bet with?").font(.subheadline.weight(.semibold))
+                    Text("Enter your bankroll and every pick will show exactly how much to bet.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        TextField("e.g. $500", value: $bankrollEntry, format: .currency(code: "USD"))
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Save") {
+                            if let amount = bankrollEntry, amount > 0 {
+                                bankroll = amount
+                                bankrollSetAt = Date.now.timeIntervalSince1970
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled((bankrollEntry ?? 0) <= 0)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        } else {
+            let total = stakes.values.reduce(0, +)
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Bankroll").font(.caption).foregroundStyle(.secondary)
+                        Text(Format.money(currentBankroll)).font(.headline.monospacedDigit())
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Today's plan · \(risk.displayName)").font(.caption).foregroundStyle(.secondary)
+                        Text(todaysPicks.isEmpty ? "—" : "\(Format.money(total)) on \(stakes.values.filter { $0 > 0 }.count) bets")
+                            .font(.headline.monospacedDigit())
+                    }
+                }
+            } footer: {
+                Text("\(risk.summary). Change your bankroll or risk level in Settings.")
+            }
         }
     }
 }
 
 struct PickCard: View {
     let pick: AIPick
+    /// Dollar amount to bet from your bankroll; nil when no bankroll is set.
+    var stake: Double?
     var onAdd: (() -> Void)?
     @State private var expanded = false
 
@@ -132,11 +197,25 @@ struct PickCard: View {
                 }
             }
 
+            if let stake, stake > 0 {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Bet \(Format.money(stake))")
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text("to win \(Format.money(BettingMath.profit(stake: stake, americanOdds: pick.bestOdds)))")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10))
+            }
+
             HStack(spacing: 8) {
                 metric("AI win %", Format.percent(pick.aiProbability, digits: 0))
                 metric("Implied", Format.percent(pick.impliedProbability, digits: 0))
                 metric("Edge", Format.percent(pick.edge, signed: true), tint: .green)
-                metric("Units", Format.point(pick.suggestedUnits))
             }
 
             if !pick.expertSummary.isEmpty {

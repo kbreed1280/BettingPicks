@@ -6,7 +6,10 @@ enum SettingsKey {
     static let appToken = "appToken"
     static let selectedSports = "selectedSports"
     static let footballWeekWindow = "footballWeekWindow"
-    static let unitSize = "unitSize"
+    static let bankroll = "bankroll"
+    static let bankrollSetAt = "bankrollSetAt"
+    static let riskLevel = "riskLevel"
+    static let adjustBankroll = "adjustBankroll"
     static let defaultStake = "defaultStake"
     static let lastSportsbook = "lastSportsbook"
     static let dailyLossLimit = "dailyLossLimit"
@@ -17,7 +20,6 @@ enum Defaults {
     /// Build-time defaults come from Config/Secrets.xcconfig via Info.plist.
     static let backendURL = infoString("BPDefaultBackendURL") ?? "http://localhost:8787"
     static let appToken = infoString("BPDefaultAppToken") ?? ""
-    static let unitSize = 25.0
     static let defaultStake = 25.0
     static let sportsbooks = ["DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN BET", "BetRivers", "Fanatics", "Hard Rock", "bet365", "Other"]
 }

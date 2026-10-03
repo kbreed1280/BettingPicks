@@ -28,6 +28,12 @@ final class PickStore {
         do {
             let response = try await APIClient().picks(sports: sports, footballWeek: footballWeek, refresh: refresh)
             sportSummaries = response.sports
+            let errors = response.sports.compactMap(\.error)
+            if errors.contains(where: { $0.contains("API_KEY is not set") }) {
+                errorMessage = "The backend is missing its API keys, so it can't analyze games yet. Add ANTHROPIC_API_KEY and ODDS_API_KEY in Railway (see README)."
+            } else if !errors.isEmpty {
+                errorMessage = "Some sports failed: " + errors.joined(separator: " · ")
+            }
             try upsert(response, context: context)
             lastLoaded = .now
         } catch {

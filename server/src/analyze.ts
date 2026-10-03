@@ -143,6 +143,7 @@ const SPORT_NOTES: Record<string, string> = {
 };
 
 export async function analyzeGames(sportKey: string, date: string, games: GameSummary[]): Promise<AnalysisResult> {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
   const isFootball = sportKey.startsWith("americanfootball_");
   const userPrompt = `Today is ${date}. Analyze this ${games[0]?.league ?? sportKey} slate and return your picks.
 ${SPORT_NOTES[sportKey] ?? ""}

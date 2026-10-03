@@ -35,13 +35,13 @@ struct BetDraft {
         legs = bet.legs
     }
 
-    init(pick: AIPick) {
+    init(pick: AIPick, stake: Double?) {
         sport = Self.trackerLeague(for: pick.sportKey)
         event = pick.event
         betType = pick.betType
         selection = pick.selectionLabel
         oddsText = Format.odds(pick.bestOdds)
-        stake = pick.suggestedUnits * UserDefaults.standard.double(SettingsKey.unitSize, default: Defaults.unitSize)
+        if let stake, stake > 0 { self.stake = stake }
         if Defaults.sportsbooks.contains(pick.bookmaker) { sportsbook = pick.bookmaker }
         isAIPick = true
         aiPickID = pick.pickID

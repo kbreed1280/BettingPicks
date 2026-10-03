@@ -76,6 +76,34 @@ final class SettlementTests: XCTestCase {
     }
 }
 
+final class StakeSizerTests: XCTestCase {
+    func testKellyFraction() {
+        // 60% at even money: full Kelly = 20%
+        XCTAssertEqual(StakeSizer.kellyFraction(probability: 0.6, americanOdds: 100), 0.2, accuracy: 1e-9)
+        XCTAssertEqual(StakeSizer.kellyFraction(probability: 0.4, americanOdds: 100), 0)
+    }
+
+    func testStakeUsesFractionalKellyAndPerBetCap() {
+        // 55% at -110: full Kelly ≈ 5.5%; moderate = 1/4 ≈ 1.375% of $1000 → $13
+        let s = StakeSizer.stakes(for: [(id: "a", probability: 0.55, odds: -110)], bankroll: 1000, risk: .moderate)
+        XCTAssertEqual(s["a"], 13)
+        // Huge edge gets capped at 4% for moderate
+        let capped = StakeSizer.stakes(for: [(id: "b", probability: 0.9, odds: 100)], bankroll: 1000, risk: .moderate)
+        XCTAssertEqual(capped["b"], 40)
+    }
+
+    func testDailyCapScalesEverythingDown() {
+        let picks = (0..<10).map { (id: "p\($0)", probability: 0.9, odds: 100) }
+        let s = StakeSizer.stakes(for: picks, bankroll: 1000, risk: .moderate) // 10 × $40 = $400 > $200 cap
+        XCTAssertEqual(s.values.reduce(0, +), 200, accuracy: 1)
+    }
+
+    func testNoEdgeNoBetAndNoBankrollNoStakes() {
+        XCTAssertEqual(StakeSizer.stakes(for: [(id: "x", probability: 0.4, odds: 100)], bankroll: 1000, risk: .moderate)["x"], 0)
+        XCTAssertTrue(StakeSizer.stakes(for: [(id: "x", probability: 0.9, odds: 100)], bankroll: 0, risk: .moderate).isEmpty)
+    }
+}
+
 final class StatsTests: XCTestCase {
     private func bet(_ status: BetStatus, odds: Int = -110, stake: Double = 110, daysAgo: Double = 0) -> Bet {
         let b = Bet(placedAt: Date.now.addingTimeInterval(-daysAgo * 86400), sport: "NFL", event: "A vs B",

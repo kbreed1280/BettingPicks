@@ -25,7 +25,17 @@ enum SourceFilter: String, CaseIterable, Identifiable {
 
 struct DashboardView: View {
     @Query(sort: \Bet.placedAt, order: .reverse) private var bets: [Bet]
-    @AppStorage(SettingsKey.unitSize) private var unitSize = Defaults.unitSize
+    @AppStorage(SettingsKey.bankroll) private var bankroll = 0.0
+    @AppStorage(SettingsKey.bankrollSetAt) private var bankrollSetAt = 0.0
+    @AppStorage(SettingsKey.adjustBankroll) private var adjustBankroll = true
+    @AppStorage(SettingsKey.defaultStake) private var defaultStake = Defaults.defaultStake
+
+    /// One unit = 1% of your bankroll (or your default stake if no bankroll is set).
+    private var unitSize: Double { bankroll > 0 ? bankroll / 100 : defaultStake }
+    private var currentBankroll: Double {
+        Bankroll.current(starting: bankroll, setAt: Date(timeIntervalSince1970: bankrollSetAt),
+                         adjustWithResults: adjustBankroll, bets: bets)
+    }
     @AppStorage(SettingsKey.dailyLossLimit) private var dailyLimit = 0.0
     @AppStorage(SettingsKey.weeklyLossLimit) private var weeklyLimit = 0.0
 
@@ -51,6 +61,10 @@ struct DashboardView: View {
                         LossLimitBanner(message: warning)
                     }
                     filters
+                    if bankroll > 0 {
+                        StatTile(title: "Bankroll", value: Format.money(currentBankroll),
+                                 tint: currentBankroll >= bankroll ? .green : .red)
+                    }
                     if bets.isEmpty {
                         ContentUnavailableView(
                             "No bets yet",

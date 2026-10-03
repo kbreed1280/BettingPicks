@@ -8,7 +8,11 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.appToken) private var appToken = Defaults.appToken
     @AppStorage(SettingsKey.selectedSports) private var selectedSports = SportOption.defaultKeys
     @AppStorage(SettingsKey.footballWeekWindow) private var footballWeekWindow = true
-    @AppStorage(SettingsKey.unitSize) private var unitSize = Defaults.unitSize
+    @Query private var allBets: [Bet]
+    @AppStorage(SettingsKey.bankroll) private var bankroll = 0.0
+    @AppStorage(SettingsKey.bankrollSetAt) private var bankrollSetAt = 0.0
+    @AppStorage(SettingsKey.adjustBankroll) private var adjustBankroll = true
+    @AppStorage(SettingsKey.riskLevel) private var riskRaw = RiskLevel.moderate.rawValue
     @AppStorage(SettingsKey.defaultStake) private var defaultStake = Defaults.defaultStake
     @AppStorage(SettingsKey.dailyLossLimit) private var dailyLimit = 0.0
     @AppStorage(SettingsKey.weeklyLossLimit) private var weeklyLimit = 0.0
@@ -40,18 +44,28 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    LabeledContent("Unit size") {
-                        TextField("Unit", value: $unitSize, format: .currency(code: "USD"))
+                    LabeledContent("Bankroll") {
+                        TextField("Amount you have to bet", value: $bankroll, format: .currency(code: "USD"))
                             .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            .onChange(of: bankroll) { bankrollSetAt = Date.now.timeIntervalSince1970 }
                     }
-                    LabeledContent("Default stake") {
+                    Picker("Risk level", selection: $riskRaw) {
+                        ForEach(RiskLevel.allCases) { Text($0.displayName).tag($0.rawValue) }
+                    }
+                    Toggle("Grow/shrink with my results", isOn: $adjustBankroll)
+                    if bankroll > 0 && adjustBankroll {
+                        LabeledContent("Current bankroll", value: Format.money(Bankroll.current(
+                            starting: bankroll, setAt: Date(timeIntervalSince1970: bankrollSetAt),
+                            adjustWithResults: true, bets: allBets)))
+                    }
+                    LabeledContent("Default stake (manual bets)") {
                         TextField("Stake", value: $defaultStake, format: .currency(code: "USD"))
                             .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                     }
                 } header: {
                     Text("Bankroll")
                 } footer: {
-                    Text("AI picks suggest a stake in units; adding one to your tracker uses units × unit size.")
+                    Text("Each AI pick shows a dollar amount sized from your bankroll: bigger edges get bigger bets. \((RiskLevel(rawValue: riskRaw) ?? .moderate).summary). With \"grow/shrink\" on, your bankroll updates as bets settle.")
                 }
 
                 Section {
