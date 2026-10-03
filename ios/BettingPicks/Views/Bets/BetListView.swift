@@ -6,6 +6,7 @@ struct BetListView: View {
     @Query(sort: \Bet.placedAt, order: .reverse) private var bets: [Bet]
     @State private var editing: Bet?
     @State private var showingAdd = false
+    @State private var showingImport = false
     @State private var search = ""
     @AppStorage("betsMode") private var mode = 0
 
@@ -32,10 +33,14 @@ struct BetListView: View {
             }
             .navigationTitle(mode == 1 ? "Games" : "Bets")
             .toolbar {
-                Button { showingAdd = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Add bet")
+                Menu {
+                    Button("New bet", systemImage: "square.and.pencil") { showingAdd = true }
+                    Button("Import from screenshot", systemImage: "photo.on.rectangle") { showingImport = true }
+                } label: { Image(systemName: "plus") }
+                .accessibilityLabel("Add bet")
             }
             .sheet(isPresented: $showingAdd) { BetFormView(draft: BetDraft()) }
+            .sheet(isPresented: $showingImport) { ImportBetsView() }
             .sheet(item: $editing) { bet in BetFormView(draft: BetDraft(bet: bet), editing: bet) }
         }
     }

@@ -160,3 +160,36 @@ final class StatsTests: XCTestCase {
         XCTAssertTrue(csv.contains("Won,100.00"))
     }
 }
+
+final class ImportMatcherTests: XCTestCase {
+    private func dto(ticket: String? = nil, status: String = "pending", stake: Double = 20) -> ImportedBetDTO {
+        ImportedBetDTO(ticketId: ticket, placedAt: "2026-10-03", sport: "NCAAF", event: "Florida Gators @ Missouri Tigers",
+                       betType: "spread", selection: "Missouri Tigers +5.5", odds: -110, stake: stake, status: status,
+                       payout: nil, legs: [])
+    }
+
+    private func existing() -> Bet {
+        Bet(sport: "NCAAF", event: "Florida Gators @ Missouri Tigers", betType: .spread, selection: "Missouri Tigers +5.5",
+            odds: -110, stake: 20, sportsbook: "FanDuel", externalID: "T1")
+    }
+
+    func testNewWhenNoMatch() {
+        XCTAssertEqual(ImportMatcher.action(for: dto(stake: 50), in: [existing()]), .new)
+    }
+
+    func testDuplicateBySameDetails() {
+        let bet = existing()
+        XCTAssertEqual(ImportMatcher.action(for: dto(), in: [bet]), .duplicate(bet))
+    }
+
+    func testUpdateResultByTicket() {
+        let bet = existing()
+        XCTAssertEqual(ImportMatcher.action(for: dto(ticket: "T1", status: "won", stake: 99), in: [bet]), .updateResult(bet))
+    }
+
+    func testLeagueAndDate() {
+        XCTAssertEqual(ImportMatcher.league("nfl"), "NFL")
+        XCTAssertEqual(ImportMatcher.league("Cricket"), "Other")
+        XCTAssertEqual(Calendar.current.component(.day, from: ImportMatcher.date("2026-10-03")), 3)
+    }
+}

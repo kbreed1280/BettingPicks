@@ -19,6 +19,8 @@ final class Bet {
     var isAIPick: Bool
     var aiPickID: String?
     var legs: [ParlayLeg]
+    /// Sportsbook ticket ID for imported bets, used to avoid duplicates.
+    var externalID: String?
 
     init(
         placedAt: Date = .now,
@@ -33,7 +35,8 @@ final class Bet {
         notes: String = "",
         isAIPick: Bool = false,
         aiPickID: String? = nil,
-        legs: [ParlayLeg] = []
+        legs: [ParlayLeg] = [],
+        externalID: String? = nil
     ) {
         self.id = UUID()
         self.placedAt = placedAt
@@ -49,6 +52,7 @@ final class Bet {
         self.isAIPick = isAIPick
         self.aiPickID = aiPickID
         self.legs = legs
+        self.externalID = externalID
         if status.isSettled { settledAt = .now }
     }
 

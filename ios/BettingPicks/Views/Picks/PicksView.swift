@@ -119,9 +119,9 @@ private struct PicksDayList: View {
                 }
             }
 
-            if !summaries.isEmpty {
+            if summaries.contains(where: { $0.status != "none" }) {
                 Section("Slate notes") {
-                    ForEach(summaries) { s in
+                    ForEach(summaries.filter { $0.status != "none" }) { s in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text("\(SportOption.displayName(league: s.league)) · \(s.gameCount) games").font(.subheadline.weight(.semibold))
@@ -141,20 +141,24 @@ private struct PicksDayList: View {
             if !isLoading {
                 Section {
                     Button {
-                        Task { await store.load(day: day, context: context, refresh: !picks.isEmpty || !summaries.isEmpty) }
+                        Task { await store.load(day: day, context: context, refresh: false) }
                     } label: {
-                        Label(picks.isEmpty && summaries.isEmpty ? "Get picks for \(dayName)" : "Re-analyze \(dayName)",
-                              systemImage: picks.isEmpty && summaries.isEmpty ? "sparkles" : "arrow.clockwise")
+                        Label("Check for picks", systemImage: "arrow.down.circle")
                     }
                 } footer: {
-                    Text("Only analyzes games played \(dayName) for: \(sportNames). Sports with no games \(dayName) cost nothing. Each new analysis uses Claude credits; results are saved, and re-analyzing within 2 hours just returns the saved picks.")
+                    Text("Picks are researched by Claude Code on your Mac (included in your Claude plan). To make new picks, open Claude Code and say \"run \(dayName)'s picks\". Checking here is free.")
                 }
             }
         }
         .overlay {
             if picks.isEmpty && !isLoading && store.errors[dayKey] == nil && !summaries.isEmpty {
-                ContentUnavailableView("No picks \(dayName)", systemImage: "hand.raised",
-                                       description: Text("No bets with a real edge. Sitting out is a valid pick."))
+                if summaries.allSatisfy({ $0.status == "none" }) {
+                    ContentUnavailableView("No picks yet for \(dayName)", systemImage: "laptopcomputer",
+                                           description: Text("Open Claude Code on your Mac and say \"run \(dayName)'s picks\", then tap Check for picks."))
+                } else {
+                    ContentUnavailableView("No picks \(dayName)", systemImage: "hand.raised",
+                                           description: Text("No bets with a real edge. Sitting out is a valid pick."))
+                }
             }
         }
         .task { await store.settle(context: context) }

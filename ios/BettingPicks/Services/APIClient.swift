@@ -125,6 +125,22 @@ struct APIClient {
         try await get("/scores", query: [.init(name: "sports", value: sports.joined(separator: ","))])
     }
 
+    func post<T: Decodable, Body: Encodable>(_ path: String, body: Body, timeout: TimeInterval = 120) async throws -> T {
+        let trimmed = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
+        guard let url = URL(string: trimmed + path) else { throw APIError.badURL }
+        var request = URLRequest(url: url, timeoutInterval: timeout)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        if !token.isEmpty { request.setValue(token, forHTTPHeaderField: "x-app-token") }
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else {
+            throw APIError.server(code, String(data: data, encoding: .utf8) ?? "")
+        }
+        return try Self.decoder.decode(T.self, from: data)
+    }
+
     static func dayKey(_ date: Date) -> String {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)

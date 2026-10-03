@@ -82,7 +82,7 @@ const PICK_SCHEMA = {
   },
 } as const;
 
-const ModelOutput = z.object({
+export const ModelOutput = z.object({
   slate_notes: z.string(),
   picks: z.array(z.object({
     event_id: z.string(),
@@ -226,13 +226,22 @@ ${JSON.stringify(games)}`;
       `${usage.outputTokens} out tokens, ${usage.webSearches} web searches, model ${usage.model}, ~$${usage.costUSD}`,
   );
 
+  return { picks: scorePicks(sportKey, games, parsed), slateNotes: parsed.slate_notes, usage };
+}
+
+/**
+ * Turns picks (from the API analysis or uploaded from Claude Code) into app picks.
+ * Prices come from the real odds data, never the model, and picks without an edge
+ * at the real price are dropped.
+ */
+export function scorePicks(sportKey: string, games: GameSummary[], parsed: z.infer<typeof ModelOutput>): Pick[] {
   const gamesById = new Map(games.map((g) => [g.eventId, g]));
   const picks: Pick[] = [];
   for (const p of parsed.picks) {
     const game = gamesById.get(p.event_id);
     const quote = game && findQuote(game, MARKET_KEY[p.market], p.selection, p.point);
     if (!game || !quote) {
-      console.warn(`[claude] dropped pick not found in odds data: ${p.event_id} ${p.market} ${p.selection} ${p.point}`);
+      console.warn(`[picks] dropped pick not found in odds data: ${p.event_id} ${p.market} ${p.selection} ${p.point}`);
       continue;
     }
     const implied = impliedProbability(quote.bestOdds);
@@ -267,6 +276,5 @@ ${JSON.stringify(games)}`;
       sources: p.sources,
     });
   }
-
-  return { picks, slateNotes: parsed.slate_notes, usage };
+  return picks;
 }

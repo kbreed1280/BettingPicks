@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
-import { analyzeGames, type Pick } from "./analyze.ts";
+import { analyzeGames, ModelOutput, scorePicks, type Pick } from "./analyze.ts";
 import { getCached, setCached } from "./cache.ts";
 import { extractBets } from "./importer.ts";
 import { fetchGames, fetchScores, SUPPORTED_SPORTS, type GameSummary } from "./odds.ts";
@@ -13,7 +13,8 @@ interface SportPicks {
   slateNotes: string;
   picks: Pick[];
   /** "running" while Claude is still analyzing; the app polls until "done". */
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "error" | "none";
+  source?: "claude-code" | "api";
   costUSD?: number;
   error?: string;
 }
@@ -47,6 +48,22 @@ app.get("/sports", (_req, res) => {
   res.json(Object.entries(SUPPORTED_SPORTS).map(([key, name]) => ({ key, name })));
 });
 
+/** Odds fetches are cached for 10 minutes per sport+window to save Odds API quota. */
+const gamesCache = new Map<string, { at: number; games: GameSummary[] }>();
+const GAMES_TTL_MS = 10 * 60 * 1000;
+
+async function getGames(sport: string, from: Date, to: Date): Promise<GameSummary[]> {
+  const key = `${sport}:${from.toISOString()}:${to.toISOString()}`;
+  const hit = gamesCache.get(key);
+  if (hit && Date.now() - hit.at < GAMES_TTL_MS) return hit.games;
+  const games = await fetchGames(sport, from, to);
+  gamesCache.set(key, { at: Date.now(), games });
+  return games;
+}
+
+/** Paid in-app analysis (API credits). Off by default: picks come from Claude Code uploads. */
+const APP_ANALYSIS = process.env.ALLOW_APP_ANALYSIS === "true";
+
 // Analyses run in the background: a slate can take 5-15 minutes, longer than
 // Railway's proxy will hold a request open. Same day+sport shares one job.
 const inFlight = new Map<string, Promise<SportPicks>>();
@@ -76,7 +93,7 @@ function startAnalysis(key: string, sport: string, date: string, from: Date, to:
   }
   const job = (async (): Promise<SportPicks> => {
     const league = SUPPORTED_SPORTS[sport];
-    const games = (await fetchGames(sport, from, to)).filter((g) => new Date(g.startTime) > new Date());
+    const games = (await getGames(sport, from, to)).filter((g) => new Date(g.startTime) > new Date());
     const base = { sport, league, date, generatedAt: new Date().toISOString(), gameCount: games.length, status: "done" as const };
     if (games.length === 0) {
       const empty = { ...base, slateNotes: "No upcoming games with odds.", picks: [] };
@@ -106,6 +123,13 @@ async function picksForSport(sport: string, date: string, from: Date, to: Date, 
   const key = `${date}:${sport}:${window}`;
   const cached = getCached<SportPicks>(key);
   const fresh = cached && Date.now() - new Date(cached.generatedAt).getTime() < REFRESH_COOLDOWN_MS;
+  if (!APP_ANALYSIS && !inFlight.get(key)) {
+    if (cached) return { ...cached, status: "done" };
+    return {
+      sport, league: SUPPORTED_SPORTS[sport], date, generatedAt: new Date().toISOString(), gameCount: 0,
+      slateNotes: "", picks: [], status: "none",
+    };
+  }
   const job = inFlight.get(key) ?? (cached && (!refresh || fresh) ? undefined : startAnalysis(key, sport, date, from, to));
   if (!job) return { ...cached!, status: "done" };
 
@@ -155,9 +179,6 @@ app.get("/picks/today", async (req, res) => {
 // GET /games?sports=...&from=<ISO>&to=<ISO>&window=week
 // The schedule with best available lines, for browsing games in the app.
 // Cached for 10 minutes per request shape to save Odds API quota.
-const gamesCache = new Map<string, { at: number; games: GameSummary[] }>();
-const GAMES_TTL_MS = 10 * 60 * 1000;
-
 app.get("/games", async (req, res) => {
   const sports = parseSports(req.query.sports);
   const from = req.query.from ? new Date(String(req.query.from)) : new Date();
@@ -166,14 +187,39 @@ app.get("/games", async (req, res) => {
   try {
     const all = await Promise.all(sports.map(async (sport) => {
       const end = weekWindow && sport.startsWith("americanfootball_") ? new Date(from.getTime() + 7 * 864e5) : to;
-      const key = `${sport}:${from.toISOString()}:${end.toISOString()}`;
-      const hit = gamesCache.get(key);
-      if (hit && Date.now() - hit.at < GAMES_TTL_MS) return hit.games;
-      const games = await fetchGames(sport, from, end);
-      gamesCache.set(key, { at: Date.now(), games });
-      return games;
+      return getGames(sport, from, end);
     }));
     res.json(all.flat().sort((a, b) => a.startTime.localeCompare(b.startTime)));
+  } catch (err) {
+    res.status(502).json({ error: (err as Error).message });
+  }
+});
+
+// POST /picks/upload  - picks researched in Claude Code (on the user's Claude plan).
+// Body: { sport, date, from, to, slate_notes, picks: [...] } using the same pick fields
+// as the in-app analysis. Prices are re-checked against live odds before saving.
+app.post("/picks/upload", async (req, res) => {
+  const { sport, date, from, to } = req.body ?? {};
+  if (!(sport in SUPPORTED_SPORTS) || typeof date !== "string" || !from || !to) {
+    res.status(400).json({ error: "Need sport, date (YYYY-MM-DD), from, to (ISO) and picks" });
+    return;
+  }
+  const parsed = ModelOutput.safeParse({ slate_notes: req.body.slate_notes ?? "", picks: req.body.picks ?? [] });
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid picks", details: parsed.error.issues.slice(0, 5) });
+    return;
+  }
+  try {
+    const games = await getGames(sport, new Date(from), new Date(to));
+    const picks = scorePicks(sport, games, parsed.data);
+    const value: SportPicks = {
+      sport, league: SUPPORTED_SPORTS[sport], date, generatedAt: new Date().toISOString(),
+      gameCount: games.length, slateNotes: parsed.data.slate_notes, picks, status: "done", source: "claude-code",
+    };
+    setCached(`${date}:${sport}:day`, value);
+    const dropped = parsed.data.picks.length - picks.length;
+    console.log(`[upload] ${sport} ${date}: ${picks.length} picks saved, ${dropped} dropped`);
+    res.json({ saved: picks.length, dropped, picks: picks.map((p) => `${p.event}: ${p.selection} ${p.point ?? ""} ${p.best_odds} (${p.bookmaker}) edge ${(p.edge * 100).toFixed(1)}%`) });
   } catch (err) {
     res.status(502).json({ error: (err as Error).message });
   }

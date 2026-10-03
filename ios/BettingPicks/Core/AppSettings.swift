@@ -20,7 +20,7 @@ enum Defaults {
     static let backendURL = infoString("BPDefaultBackendURL") ?? "http://localhost:8787"
     static let appToken = infoString("BPDefaultAppToken") ?? ""
     static let defaultStake = 25.0
-    static let sportsbooks = ["DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN BET", "BetRivers", "Fanatics", "Hard Rock", "bet365", "Other"]
+    static let sportsbooks = ["FanDuel", "DraftKings", "BetMGM", "Caesars", "theScore Bet", "ESPN BET", "BetRivers", "Fanatics", "Hard Rock Bet", "Bally Bet", "BetParx", "bet365", "Other"]
 }
 
 private func infoString(_ key: String) -> String? {
