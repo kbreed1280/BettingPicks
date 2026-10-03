@@ -7,6 +7,7 @@ struct BetListView: View {
     @State private var editing: Bet?
     @State private var showingAdd = false
     @State private var showingImport = false
+    @State private var deleting: Bet?
     @State private var search = ""
     @AppStorage("betsMode") private var mode = 0
 
@@ -41,6 +42,12 @@ struct BetListView: View {
             }
             .sheet(isPresented: $showingAdd) { BetFormView(draft: BetDraft()) }
             .sheet(isPresented: $showingImport) { ImportBetsView() }
+            .confirmationDialog("Delete this bet?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                                titleVisibility: .visible, presenting: deleting) { bet in
+                Button("Delete \(bet.selection)", role: .destructive) { context.delete(bet) }
+            } message: { bet in
+                Text("\(bet.event) · \(Format.money(bet.stake))")
+            }
             .sheet(item: $editing) { bet in BetFormView(draft: BetDraft(bet: bet), editing: bet) }
         }
     }
@@ -80,8 +87,9 @@ struct BetListView: View {
                     Button("Won") { set(bet, .won) }.tint(.green)
                     Button("Lost") { set(bet, .lost) }.tint(.red)
                 }
-                .swipeActions(edge: .trailing) {
-                    Button("Delete", role: .destructive) { context.delete(bet) }
+                // No full-swipe here: deleting needs a deliberate tap and a confirmation.
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button("Delete", role: .destructive) { deleting = bet }
                     Button("Push") { set(bet, .push) }.tint(.gray)
                     if bet.status != .pending {
                         Button("Pending") { set(bet, .pending) }.tint(.orange)
