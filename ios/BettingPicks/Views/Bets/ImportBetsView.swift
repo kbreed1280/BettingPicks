@@ -86,6 +86,7 @@ struct ImportBetsView: View {
     @State private var sportsbook = ""
     @State private var progress: String?
     @State private var error: String?
+    @State private var fromInbox = false
 
     struct Candidate: Identifiable {
         let id = UUID()
@@ -98,12 +99,27 @@ struct ImportBetsView: View {
         NavigationStack {
             List {
                 Section {
+                    Button {
+                        Task { await loadInbox() }
+                    } label: {
+                        Label("Get bets from Claude Code", systemImage: "laptopcomputer.and.arrow.down")
+                    }
+                    .disabled(progress != nil)
+                } header: {
+                    Text("Free (your Claude plan)")
+                } footer: {
+                    Text("AirDrop your FanDuel My Bets screenshots to your Mac, tell Claude Code \"import my bets\", then tap this.")
+                }
+
+                Section {
                     PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
                         Label(candidates.isEmpty ? "Choose screenshots" : "Add more screenshots", systemImage: "photo.on.rectangle.angled")
                     }
                     .disabled(progress != nil)
+                } header: {
+                    Text("Read on phone (uses API credits)")
                 } footer: {
-                    Text("In FanDuel, open My Bets (Open or Settled), take screenshots, then choose them here. Bets you already logged are skipped, and settled ones update your results.")
+                    Text("About 1–2¢ per screenshot from your Anthropic API credit. Bets you already logged are skipped, and settled ones update your results.")
                 }
 
                 if let progress {
@@ -155,6 +171,33 @@ struct ImportBetsView: View {
         }
     }
 
+    private func loadInbox() async {
+        error = nil
+        progress = "Checking Claude Code inbox…"
+        defer { progress = nil }
+        do {
+            let result: ImportResponse = try await APIClient().get("/bets/inbox", query: [])
+            if result.bets.isEmpty {
+                error = "No bets waiting. Tell Claude Code \"import my bets\" first."
+                return
+            }
+            fromInbox = true
+            add(result)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func add(_ result: ImportResponse) {
+        if !result.sportsbook.isEmpty { sportsbook = result.sportsbook }
+        for dto in result.bets where !candidates.contains(where: { $0.dto == dto }) {
+            let action = ImportMatcher.action(for: dto, in: bets)
+            var include = true
+            if case .duplicate = action { include = false }
+            candidates.append(Candidate(dto: dto, action: action, include: include))
+        }
+    }
+
     private func read(_ items: [PhotosPickerItem]) async {
         error = nil
         defer { progress = nil; photoItems = [] }
@@ -166,13 +209,7 @@ struct ImportBetsView: View {
                 struct Body: Encodable { let image: String; let mediaType: String }
                 let result: ImportResponse = try await APIClient().post(
                     "/import/screenshot", body: Body(image: jpeg.base64EncodedString(), mediaType: "image/jpeg"))
-                if !result.sportsbook.isEmpty { sportsbook = result.sportsbook }
-                for dto in result.bets where !candidates.contains(where: { $0.dto == dto }) {
-                    let action = ImportMatcher.action(for: dto, in: bets)
-                    var include = true
-                    if case .duplicate = action { include = false }
-                    candidates.append(Candidate(dto: dto, action: action, include: include))
-                }
+                add(result)
             } catch {
                 self.error = "Couldn't read screenshot \(i + 1): \(error.localizedDescription)"
             }
@@ -207,6 +244,7 @@ struct ImportBetsView: View {
                 context.insert(bet)
             }
         }
+        if fromInbox { Task { try? await APIClient().delete("/bets/inbox") } }
         dismiss()
     }
 }

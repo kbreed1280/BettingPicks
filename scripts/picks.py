@@ -3,6 +3,7 @@
 
   picks.py slate <sport_key> [YYYY-MM-DD]   print the day's games + best odds (local time zone)
   picks.py upload <picks.json>              upload picks for the app
+  picks.py bets <bets.json>                 send bets read from screenshots to the app's inbox
   picks.py status                           backend health / spend
 
 Backend URL and app token come from ios/Config/Secrets.xcconfig (git-ignored).
@@ -75,12 +76,20 @@ def upload(path):
         print("  -", line)
 
 
+def bets(path):
+    body = json.loads(pathlib.Path(path).read_text())
+    result = request("/bets/inbox", body)
+    print(f"Sent {len(body.get('bets', []))} bets. {result['waiting']} waiting in the app's inbox.")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "slate" and len(sys.argv) >= 3:
         slate(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
     elif cmd == "upload" and len(sys.argv) >= 3:
         upload(sys.argv[2])
+    elif cmd == "bets" and len(sys.argv) >= 3:
+        bets(sys.argv[2])
     elif cmd == "status":
         print(json.dumps(request("/health"), indent=1))
     else:

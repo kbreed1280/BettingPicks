@@ -149,6 +149,15 @@ struct APIClient {
         return try Self.decoder.decode(T.self, from: data)
     }
 
+    func delete(_ path: String) async throws {
+        let trimmed = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
+        guard let url = URL(string: trimmed + path) else { throw APIError.badURL }
+        var request = URLRequest(url: url, timeoutInterval: 30)
+        request.httpMethod = "DELETE"
+        if !token.isEmpty { request.setValue(token, forHTTPHeaderField: "x-app-token") }
+        _ = try await URLSession.shared.data(for: request)
+    }
+
     static func dayKey(_ date: Date) -> String {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)

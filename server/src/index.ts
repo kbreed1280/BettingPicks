@@ -226,6 +226,32 @@ app.post("/picks/upload", async (req, res) => {
   }
 });
 
+// Bets inbox: bets read from screenshots in Claude Code (on the user's plan) wait here
+// until the app pulls them. POST adds (from Claude Code), GET lists, DELETE clears.
+const INBOX_KEY = "inbox:bets";
+
+app.post("/bets/inbox", (req, res) => {
+  const { sportsbook, bets } = req.body ?? {};
+  if (!Array.isArray(bets)) {
+    res.status(400).json({ error: "Send {sportsbook, bets: [...]}" });
+    return;
+  }
+  const inbox = getCached<{ sportsbook: string; bets: unknown[] }>(INBOX_KEY) ?? { sportsbook: "", bets: [] };
+  const value = { sportsbook: sportsbook || inbox.sportsbook, bets: [...inbox.bets, ...bets] };
+  setCached(INBOX_KEY, value);
+  console.log(`[inbox] +${bets.length} bets (${value.bets.length} waiting)`);
+  res.json({ waiting: value.bets.length });
+});
+
+app.get("/bets/inbox", (_req, res) => {
+  res.json(getCached(INBOX_KEY) ?? { sportsbook: "", bets: [] });
+});
+
+app.delete("/bets/inbox", (_req, res) => {
+  setCached(INBOX_KEY, { sportsbook: "", bets: [] });
+  res.json({ ok: true });
+});
+
 // POST /import/screenshot  {"image": "<base64>", "mediaType": "image/jpeg"}
 // Reads a sportsbook "My Bets" screenshot and returns the bets on it.
 app.post("/import/screenshot", async (req, res) => {
