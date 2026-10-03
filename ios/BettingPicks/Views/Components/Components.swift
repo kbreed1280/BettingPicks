@@ -63,6 +63,35 @@ struct LossLimitBanner: View {
     }
 }
 
+/// "LIVE  Q3 5:21   Memphis 14 – Charlotte 7"
+struct LiveScoreBar: View {
+    let live: LiveGameDTO
+    let awayTeam: String
+    let homeTeam: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if live.isLive {
+                Text("LIVE").font(.caption2.weight(.heavy)).foregroundStyle(.white)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(.red, in: Capsule())
+            }
+            Text(live.detail).font(.caption.weight(.semibold)).foregroundStyle(live.isLive ? .red : .secondary)
+            Spacer()
+            if let a = live.awayScore, let h = live.homeScore {
+                Text("\(short(awayTeam)) \(a) – \(short(homeTeam)) \(h)")
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+            }
+        }
+    }
+
+    /// "Florida Gators" -> "Florida"
+    private func short(_ team: String) -> String {
+        let words = team.split(separator: " ")
+        return words.count > 1 ? words.dropLast().joined(separator: " ") : team
+    }
+}
+
 extension Double {
     var profitColor: Color { self > 0 ? .green : self < 0 ? .red : .primary }
 }

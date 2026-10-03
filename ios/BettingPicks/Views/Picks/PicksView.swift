@@ -30,6 +30,7 @@ private struct PicksDayList: View {
 
     @Environment(\.modelContext) private var context
     @Environment(PickStore.self) private var store
+    @Environment(LiveScores.self) private var live
     @Query private var picks: [AIPick]
     @Query private var bets: [Bet]
     @State private var addingFrom: AIPick?
@@ -162,6 +163,10 @@ private struct PicksDayList: View {
             }
         }
         .task { await store.settle(context: context) }
+        .task(id: dayKey) {
+            guard !picks.isEmpty else { return }
+            await live.poll(sports: Array(Set(picks.map(\.sportKey))), days: [day])
+        }
         .sheet(item: $addingFrom) { pick in
             BetFormView(draft: BetDraft(pick: pick, stake: stakes[pick.pickID])) { _ in pick.addedToTracker = true }
         }
@@ -175,7 +180,7 @@ private struct PicksDayList: View {
     private func cards(_ picks: [AIPick]) -> some View {
         let stakes = stakes
         return ForEach(picks) { pick in
-            PickCard(pick: pick, stake: stakes[pick.pickID]) { addingFrom = pick }
+            PickCard(pick: pick, stake: stakes[pick.pickID], live: live.game(home: pick.homeTeam, away: pick.awayTeam)) { addingFrom = pick }
         }
     }
 
@@ -228,8 +233,16 @@ struct PickCard: View {
     let pick: AIPick
     /// Dollar amount to bet from your bankroll; nil when no bankroll is set.
     var stake: Double?
+    var live: LiveGameDTO?
     var onAdd: (() -> Void)?
     @State private var expanded = false
+
+    /// How the pick stands right now, graded on the current score.
+    private var liveStatus: BetStatus? {
+        guard let live, live.state != "pre", let h = live.homeScore, let a = live.awayScore else { return nil }
+        return Settlement.grade(market: pick.market, selection: pick.selection, point: pick.point,
+                                homeTeam: pick.homeTeam, awayTeam: pick.awayTeam, homeScore: h, awayScore: a)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -241,6 +254,21 @@ struct PickCard: View {
                 ConfidenceView(level: pick.confidence)
             }
             Text(pick.event).font(.subheadline).foregroundStyle(.secondary)
+            if let live, live.state != "pre" {
+                VStack(alignment: .leading, spacing: 4) {
+                    LiveScoreBar(live: live, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam)
+                    if let status = liveStatus, pick.result == .pending {
+                        let text = live.isFinal
+                            ? (status == .won ? "Won" : status == .lost ? "Lost" : "Push")
+                            : (status == .won ? "Covering" : status == .lost ? "Not covering" : "Right on the number")
+                        Label(text, systemImage: status == .won ? "checkmark.circle.fill" : status == .lost ? "xmark.circle.fill" : "equal.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(status == .won ? .green : status == .lost ? .red : .secondary)
+                    }
+                }
+                .padding(8)
+                .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+            }
             HStack(alignment: .firstTextBaseline) {
                 Text(pick.selectionLabel).font(.title3.weight(.bold))
                 Spacer()

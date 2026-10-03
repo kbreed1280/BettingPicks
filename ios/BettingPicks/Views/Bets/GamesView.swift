@@ -66,6 +66,7 @@ struct GamesView: View {
     @AppStorage(SettingsKey.selectedSports) private var selectedSports = SportOption.defaultKeys
     @State private var selectedDay = Calendar.current.startOfDay(for: .now)
     @Query private var picks: [AIPick]
+    @Environment(LiveScores.self) private var live
 
     @State private var games: [GameDTO] = []
     @State private var loading = false
@@ -121,7 +122,8 @@ struct GamesView: View {
             ForEach(byLeague.keys.sorted(), id: \.self) { league in
                 Section(SportOption.displayName(league: league)) {
                     ForEach(byLeague[league] ?? []) { game in
-                        GameRow(game: game, hasAIPick: aiPickEvents.contains(game.eventId)) { type, quote in
+                        GameRow(game: game, hasAIPick: aiPickEvents.contains(game.eventId),
+                                live: live.game(home: game.homeTeam, away: game.awayTeam)) { type, quote in
                             draft = BetDraft(game: game, betType: type, quote: quote)
                         }
                     }
@@ -139,6 +141,9 @@ struct GamesView: View {
         }
         .refreshable { await load() }
         .task { if games.isEmpty { await load() } }
+        .task(id: selectedDay) {
+            await live.poll(sports: selectedSports.split(separator: ",").map(String.init), days: [selectedDay])
+        }
         .sheet(item: Binding(get: { draft.map(IdentifiedDraft.init) }, set: { draft = $0?.draft })) { item in
             BetFormView(draft: item.draft)
         }
@@ -175,6 +180,7 @@ private struct IdentifiedDraft: Identifiable {
 private struct GameRow: View {
     let game: GameDTO
     let hasAIPick: Bool
+    var live: LiveGameDTO?
     let onPick: (BetType, GameQuoteDTO) -> Void
 
     var body: some View {
@@ -182,7 +188,7 @@ private struct GameRow: View {
             HStack(spacing: 6) {
                 Text(game.league).font(.caption.weight(.bold)).foregroundStyle(.tint)
                 if game.hasStarted {
-                    Text("LIVE / STARTED").font(.caption2.weight(.bold)).foregroundStyle(.red)
+                    if live == nil { Text("STARTED").font(.caption2.weight(.bold)).foregroundStyle(.red) }
                 } else {
                     Text(game.startTime, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(.secondary)
                 }
@@ -190,6 +196,9 @@ private struct GameRow: View {
                 if hasAIPick {
                     Label("AI pick", systemImage: "sparkles").font(.caption2.weight(.semibold)).foregroundStyle(.tint)
                 }
+            }
+            if let live, live.state != "pre" {
+                LiveScoreBar(live: live, awayTeam: game.awayTeam, homeTeam: game.homeTeam)
             }
 
             Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {

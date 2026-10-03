@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { analyzeGames, ModelOutput, scorePicks, type Pick } from "./analyze.ts";
 import { getCached, setCached } from "./cache.ts";
 import { extractBets } from "./importer.ts";
+import { fetchLive } from "./live.ts";
 import { fetchGames, fetchScores, SUPPORTED_SPORTS, type GameSummary } from "./odds.ts";
 
 interface SportPicks {
@@ -239,6 +240,22 @@ app.post("/import/screenshot", async (req, res) => {
     console.error("[import] failed:", err);
     res.status(502).json({ error: (err as Error).message });
   }
+});
+
+// GET /live?sports=...&dates=YYYYMMDD[,YYYYMMDD...]  - live/final scores (ESPN, cached 30s, no Odds quota).
+app.get("/live", async (req, res) => {
+  const sports = parseSports(req.query.sports);
+  const dates = String(req.query.dates ?? "").split(",").filter((d) => /^\d{8}$/.test(d)).slice(0, 7);
+  if (dates.length === 0) {
+    res.status(400).json({ error: "Pass dates=YYYYMMDD (comma-separate up to 7)" });
+    return;
+  }
+  const jobs = sports.flatMap((s) => dates.map((d) => fetchLive(s, d).catch((err) => {
+    console.warn(`[live] ${s} ${d} failed:`, (err as Error).message);
+    return [];
+  })));
+  const results = await Promise.all(jobs);
+  res.json(results.flat());
 });
 
 // GET /scores?sports=basketball_nba,icehockey_nhl  - recent final scores for settling picks.

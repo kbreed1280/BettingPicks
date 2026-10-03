@@ -14,6 +14,7 @@
 		238C6CA7F95005343F48D011 /* BettingPicksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A223EAE7DDF8E087ECB6B99 /* BettingPicksTests.swift */; };
 		2646F4480385EBECB72EC989 /* BettingPicksApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D0204DAA4E0E82DBDDEDAD /* BettingPicksApp.swift */; };
 		28B29563E8841333266DF255 /* StakeSizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C06E8C22810C4125F1F81B /* StakeSizer.swift */; };
+		38F0ABC8BF0CE2E80030A5FF /* LiveScores.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C61C93C971C4DA6226CC3E /* LiveScores.swift */; };
 		4DDC03480E9C99A822283479 /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = A439098B76D2E266C527BA73 /* Stats.swift */; };
 		53B2B593046C6BF3CA75B5E4 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7350EA6E2BB345EDEC590B21 /* Enums.swift */; };
 		55B331F211C5B25959A9A568 /* BetListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B611ADA59E40605190230104 /* BetListView.swift */; };
@@ -70,6 +71,7 @@
 		AB82340C3B52D4658040B30D /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		B4B2382621D4076D91227B1D /* BettingPicks.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BettingPicks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B611ADA59E40605190230104 /* BetListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetListView.swift; sourceTree = "<group>"; };
+		C1C61C93C971C4DA6226CC3E /* LiveScores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScores.swift; sourceTree = "<group>"; };
 		E24809EE62845A57ECB67C05 /* BreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
 		FF40D3A9A68DDFD983D06060 /* AIPick.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIPick.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -200,6 +202,7 @@
 			isa = PBXGroup;
 			children = (
 				AB82340C3B52D4658040B30D /* APIClient.swift */,
+				C1C61C93C971C4DA6226CC3E /* LiveScores.swift */,
 				4223C99AFE3E18E87246AD64 /* PickStore.swift */,
 			);
 			path = Services;
@@ -336,6 +339,7 @@
 				53B2B593046C6BF3CA75B5E4 /* Enums.swift in Sources */,
 				6772EC972835ED1718297DC0 /* GamesView.swift in Sources */,
 				5D575EB2EAEBBDC2E3B3BC72 /* ImportBetsView.swift in Sources */,
+				38F0ABC8BF0CE2E80030A5FF /* LiveScores.swift in Sources */,
 				20935C524DC74A93CE1CCF3E /* PickHistoryView.swift in Sources */,
 				0961217C05C303E6B2DC1C73 /* PickStore.swift in Sources */,
 				7C11300E91095EF23E193685 /* PicksView.swift in Sources */,

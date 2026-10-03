@@ -4,11 +4,13 @@ import SwiftUI
 @main
 struct BettingPicksApp: App {
     @State private var pickStore = PickStore()
+    @State private var liveScores = LiveScores()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(pickStore)
+                .environment(liveScores)
         }
         .modelContainer(for: [Bet.self, AIPick.self])
     }

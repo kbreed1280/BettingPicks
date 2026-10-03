@@ -91,13 +91,14 @@ final class PickStore {
         isSettling = true
         defer { isSettling = false }
         do {
-            let sports = Array(Set(pending.map(\.sportKey)))
-            let scores = try await APIClient().scores(sports: sports)
-            let byEvent = Dictionary(scores.map { ($0.eventId, $0) }, uniquingKeysWith: { a, _ in a })
+            // Final scores come from the free ESPN feed, so settling doesn't use Odds API quota.
+            let scores = LiveScores()
+            await scores.refresh(sports: Array(Set(pending.map(\.sportKey))),
+                                 days: Array(Set(pending.map { Calendar.current.startOfDay(for: $0.startTime) })))
             let bets = try context.fetch(FetchDescriptor<Bet>(predicate: #Predicate { $0.statusRaw == pendingRaw }))
 
             for pick in pending {
-                guard let s = byEvent[pick.eventID], s.completed,
+                guard let s = scores.game(home: pick.homeTeam, away: pick.awayTeam), s.isFinal,
                       let home = s.homeScore, let away = s.awayScore else { continue }
                 pick.homeScore = home
                 pick.awayScore = away
