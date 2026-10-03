@@ -8,7 +8,13 @@ import { findQuote, type GameSummary, type MarketKey } from "./odds.ts";
 import { expectedValue, impliedProbability, kellyFraction, round } from "./math.ts";
 
 const MODEL = "claude-opus-5-5";
-const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+// Reads ANTHROPIC_API_KEY. Keys not scoped to a workspace (sk-ant-usr-...) must
+// also name one, via ANTHROPIC_WORKSPACE_ID.
+const client = new Anthropic({
+  defaultHeaders: process.env.ANTHROPIC_WORKSPACE_ID
+    ? { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID }
+    : undefined,
+});
 
 const SYSTEM_PROMPT = `You are a disciplined, data-driven sports betting analyst. Your job is to find bets where the true win probability is higher than the odds imply - positive expected value - not simply the teams most likely to win.
 
