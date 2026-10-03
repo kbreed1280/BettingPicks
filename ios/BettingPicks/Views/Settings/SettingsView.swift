@@ -5,7 +5,7 @@ struct SettingsView: View {
     @Query(sort: \Bet.placedAt) private var bets: [Bet]
 
     @AppStorage(SettingsKey.backendURL) private var backendURL = Defaults.backendURL
-    @AppStorage(SettingsKey.appToken) private var appToken = ""
+    @AppStorage(SettingsKey.appToken) private var appToken = Defaults.appToken
     @AppStorage(SettingsKey.selectedSports) private var selectedSports = SportOption.defaultKeys
     @AppStorage(SettingsKey.footballWeekWindow) private var footballWeekWindow = true
     @AppStorage(SettingsKey.unitSize) private var unitSize = Defaults.unitSize

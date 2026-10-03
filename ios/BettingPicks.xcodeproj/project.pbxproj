@@ -51,6 +51,7 @@
 		42DE529EB9F9DF7DFF1EB74F /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		47B0D47D39CA9D396069BA90 /* CSVExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVExport.swift; sourceTree = "<group>"; };
 		5413D94E1EFAD2ED17E9F813 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		553A009C019CA7480BDBE674 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		6A0C7AD7EB3788177C76B6FC /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		6CBCFB4C4CE667D0310B86F8 /* Settlement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settlement.swift; sourceTree = "<group>"; };
 		7350EA6E2BB345EDEC590B21 /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
@@ -134,6 +135,7 @@
 			children = (
 				9040E704C302194BB9DF4902 /* BettingPicks */,
 				FF7346EFA517558212BF12E8 /* BettingPicksTests */,
+				A7EDA1B09D31E06A014D868C /* Config */,
 				0763FB40E7A689D01475F260 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -175,6 +177,14 @@
 				13914AE5B3286A0F8B18E513 /* PicksView.swift */,
 			);
 			path = Picks;
+			sourceTree = "<group>";
+		};
+		A7EDA1B09D31E06A014D868C /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				553A009C019CA7480BDBE674 /* Base.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		B1C87168F9F13B83DD6F6E3C /* Services */ = {
@@ -259,11 +269,9 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0E2DF25D9856C7FBEE54197C = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					6119C537D26711A1764108AB = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -381,6 +389,7 @@
 		};
 		A6803088FF17B8EA5AD0896B /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 553A009C019CA7480BDBE674 /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -416,7 +425,6 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -448,6 +456,7 @@
 		};
 		D16B69338738A25B86D47DD8 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 553A009C019CA7480BDBE674 /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -483,7 +492,6 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

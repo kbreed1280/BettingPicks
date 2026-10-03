@@ -79,7 +79,7 @@ struct APIClient {
 
     init(defaults: UserDefaults = .standard) {
         baseURL = defaults.string(forKey: SettingsKey.backendURL) ?? Defaults.backendURL
-        token = defaults.string(forKey: SettingsKey.appToken) ?? ""
+        token = defaults.string(forKey: SettingsKey.appToken) ?? Defaults.appToken
     }
 
     static let decoder: JSONDecoder = {

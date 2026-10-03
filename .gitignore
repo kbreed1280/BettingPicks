@@ -15,3 +15,4 @@ server/data/
 .env
 .env.*
 !.env.example
+ios/Config/Secrets.xcconfig
