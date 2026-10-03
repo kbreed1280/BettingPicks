@@ -1,7 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { analyzeGames, type Pick } from "./analyze.ts";
 import { getCached, setCached } from "./cache.ts";
-import { fetchGames, fetchScores, SUPPORTED_SPORTS } from "./odds.ts";
+import { fetchGames, fetchScores, SUPPORTED_SPORTS, type GameSummary } from "./odds.ts";
 
 interface SportPicks {
   sport: string;
@@ -102,6 +102,33 @@ app.get("/picks/today", async (req, res) => {
 
   const picks = results.flatMap((r) => r.picks).sort((a, b) => b.edge - a.edge);
   res.json({ date, sports: results.map(({ picks: _p, ...rest }) => rest), picks });
+});
+
+// GET /games?sports=...&from=<ISO>&to=<ISO>&window=week
+// The schedule with best available lines, for browsing games in the app.
+// Cached for 10 minutes per request shape to save Odds API quota.
+const gamesCache = new Map<string, { at: number; games: GameSummary[] }>();
+const GAMES_TTL_MS = 10 * 60 * 1000;
+
+app.get("/games", async (req, res) => {
+  const sports = parseSports(req.query.sports);
+  const from = req.query.from ? new Date(String(req.query.from)) : new Date();
+  const to = req.query.to ? new Date(String(req.query.to)) : new Date(from.getTime() + 864e5);
+  const weekWindow = req.query.window === "week";
+  try {
+    const all = await Promise.all(sports.map(async (sport) => {
+      const end = weekWindow && sport.startsWith("americanfootball_") ? new Date(from.getTime() + 7 * 864e5) : to;
+      const key = `${sport}:${from.toISOString()}:${end.toISOString()}`;
+      const hit = gamesCache.get(key);
+      if (hit && Date.now() - hit.at < GAMES_TTL_MS) return hit.games;
+      const games = await fetchGames(sport, from, end);
+      gamesCache.set(key, { at: Date.now(), games });
+      return games;
+    }));
+    res.json(all.flat().sort((a, b) => a.startTime.localeCompare(b.startTime)));
+  } catch (err) {
+    res.status(502).json({ error: (err as Error).message });
+  }
 });
 
 // GET /scores?sports=basketball_nba,icehockey_nhl  - recent final scores for settling picks.

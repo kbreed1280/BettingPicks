@@ -20,6 +20,7 @@
 		62F83A104AB6C1EBBF9C17D2 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24809EE62845A57ECB67C05 /* BreakdownView.swift */; };
 		6311E2867FA6BE281604982D /* BettingMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3E559531CF19EFF65C5D4FF /* BettingMath.swift */; };
 		636E5DF29FFDAB13AFD67F6C /* BetFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301EDFCF88B52B51808CB55B /* BetFormView.swift */; };
+		6772EC972835ED1718297DC0 /* GamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE2B8F3F3AD258400E70861 /* GamesView.swift */; };
 		6AC5525B3E0DB3A4B752DBA9 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB82340C3B52D4658040B30D /* APIClient.swift */; };
 		6F83FA0D4D6E81282F42591E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D74E5E3CA97346836BD1A4B /* SettingsView.swift */; };
 		7C11300E91095EF23E193685 /* PicksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13914AE5B3286A0F8B18E513 /* PicksView.swift */; };
@@ -43,6 +44,7 @@
 
 /* Begin PBXFileReference section */
 		13914AE5B3286A0F8B18E513 /* PicksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicksView.swift; sourceTree = "<group>"; };
+		1EE2B8F3F3AD258400E70861 /* GamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamesView.swift; sourceTree = "<group>"; };
 		29F220E2171964A891237308 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		2ABC6F9091FB8C3493BE38CF /* PickHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickHistoryView.swift; sourceTree = "<group>"; };
 		301EDFCF88B52B51808CB55B /* BetFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetFormView.swift; sourceTree = "<group>"; };
@@ -98,6 +100,7 @@
 			children = (
 				301EDFCF88B52B51808CB55B /* BetFormView.swift */,
 				B611ADA59E40605190230104 /* BetListView.swift */,
+				1EE2B8F3F3AD258400E70861 /* GamesView.swift */,
 			);
 			path = Bets;
 			sourceTree = "<group>";
@@ -328,6 +331,7 @@
 				D59BA54D425D3F2E904D1769 /* Components.swift in Sources */,
 				C8B838A6E8CC19300E627E9D /* DashboardView.swift in Sources */,
 				53B2B593046C6BF3CA75B5E4 /* Enums.swift in Sources */,
+				6772EC972835ED1718297DC0 /* GamesView.swift in Sources */,
 				20935C524DC74A93CE1CCF3E /* PickHistoryView.swift in Sources */,
 				0961217C05C303E6B2DC1C73 /* PickStore.swift in Sources */,
 				7C11300E91095EF23E193685 /* PicksView.swift in Sources */,

@@ -7,6 +7,7 @@ struct BetListView: View {
     @State private var editing: Bet?
     @State private var showingAdd = false
     @State private var search = ""
+    @AppStorage("betsMode") private var mode = 0
 
     private var visible: [Bet] {
         guard !search.isEmpty else { return bets }
@@ -19,6 +20,27 @@ struct BetListView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+                Picker("View", selection: $mode) {
+                    Text("My Bets").tag(0)
+                    Text("Games").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+                if mode == 1 { GamesView() } else { betsList }
+            }
+            .navigationTitle(mode == 1 ? "Games" : "Bets")
+            .toolbar {
+                Button { showingAdd = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Add bet")
+            }
+            .sheet(isPresented: $showingAdd) { BetFormView(draft: BetDraft()) }
+            .sheet(item: $editing) { bet in BetFormView(draft: BetDraft(bet: bet), editing: bet) }
+        }
+    }
+
+    private var betsList: some View {
             List {
                 let pending = visible.filter { $0.status == .pending }
                 let settled = visible.filter { $0.status != .pending }
@@ -43,14 +65,6 @@ struct BetListView: View {
                 }
             }
             .searchable(text: $search, prompt: "Team, event, or sport")
-            .navigationTitle("Bets")
-            .toolbar {
-                Button { showingAdd = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Add bet")
-            }
-            .sheet(isPresented: $showingAdd) { BetFormView(draft: BetDraft()) }
-            .sheet(item: $editing) { bet in BetFormView(draft: BetDraft(bet: bet), editing: bet) }
-        }
     }
 
     private func rows(_ list: [Bet]) -> some View {

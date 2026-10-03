@@ -129,7 +129,7 @@ struct APIClient {
         return f.string(from: date)
     }
 
-    private func get<T: Decodable>(_ path: String, query: [URLQueryItem], timeout: TimeInterval = 30) async throws -> T {
+    func get<T: Decodable>(_ path: String, query: [URLQueryItem], timeout: TimeInterval = 30) async throws -> T {
         let trimmed = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: " /"))
         guard var components = URLComponents(string: trimmed + path), components.host != nil else { throw APIError.badURL }
         if !query.isEmpty { components.queryItems = query }
