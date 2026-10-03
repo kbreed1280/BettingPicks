@@ -58,8 +58,11 @@ private struct PicksDayList: View {
         Bankroll.current(starting: bankroll, setAt: Date(timeIntervalSince1970: bankrollSetAt),
                          adjustWithResults: adjustBankroll, bets: bets)
     }
+    private var inPlay: Double { Bankroll.inPlay(bets) }
+    /// Bet sizes come from what's actually left to bet, not money already on open bets.
+    private var available: Double { max(0, currentBankroll - inPlay) }
     private var stakes: [String: Double] {
-        StakeSizer.stakes(for: picks, bankroll: currentBankroll, risk: risk)
+        StakeSizer.stakes(for: picks, bankroll: available, risk: risk)
     }
     private var summaries: [SportSummary] { store.summaries[dayKey] ?? [] }
     private var isLoading: Bool { store.loadingDay == dayKey }
@@ -212,8 +215,12 @@ private struct PicksDayList: View {
             Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Bankroll").font(.caption).foregroundStyle(.secondary)
-                        Text(Format.money(currentBankroll)).font(.headline.monospacedDigit())
+                        Text("Available").font(.caption).foregroundStyle(.secondary)
+                        Text(Format.money(available)).font(.headline.monospacedDigit())
+                        if inPlay > 0 {
+                            Text("of \(Format.money(currentBankroll)) · \(Format.money(inPlay)) in play")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
@@ -223,7 +230,7 @@ private struct PicksDayList: View {
                     }
                 }
             } footer: {
-                Text("\(risk.summary). Change your bankroll or risk level in Settings.")
+                Text("Bet sizes use your available money (bankroll minus open bets). \(risk.summary). Change your bankroll or risk level in Settings.")
             }
         }
     }

@@ -80,4 +80,14 @@ enum Bankroll {
             .reduce(0) { $0 + $1.profit }
         return max(0, starting + results)
     }
+
+    /// Money tied up in open bets (the sportsbook already took it).
+    static func inPlay(_ bets: [Bet]) -> Double {
+        bets.filter { $0.status == .pending }.reduce(0) { $0 + $1.stake }
+    }
+
+    /// What you can still bet: bankroll minus open bets.
+    static func available(starting: Double, setAt: Date, adjustWithResults: Bool, bets: [Bet]) -> Double {
+        max(0, current(starting: starting, setAt: setAt, adjustWithResults: adjustWithResults, bets: bets) - inPlay(bets))
+    }
 }

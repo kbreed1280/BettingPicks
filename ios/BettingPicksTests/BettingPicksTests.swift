@@ -144,6 +144,16 @@ final class StatsTests: XCTestCase {
         XCTAssertEqual(OddsRange(odds: 300), .longshot)
     }
 
+    func testInPlayAndAvailable() {
+        let start = Date.now.addingTimeInterval(-3600)
+        let open1 = bet(.pending, stake: 10), open2 = bet(.pending, stake: 30)
+        let won = bet(.won, stake: 110) // +100, settled now (after start)
+        let bets = [open1, open2, won]
+        XCTAssertEqual(Bankroll.inPlay(bets), 40)
+        XCTAssertEqual(Bankroll.current(starting: 500, setAt: start, adjustWithResults: true, bets: bets), 600, accuracy: 1e-9)
+        XCTAssertEqual(Bankroll.available(starting: 500, setAt: start, adjustWithResults: true, bets: bets), 560, accuracy: 1e-9)
+    }
+
     func testLossLimit() {
         let bets = [bet(.lost, stake: 100), bet(.lost, stake: 60)]
         XCTAssertNotNil(LossLimit.warning(bets: bets, daily: 150, weekly: 0))

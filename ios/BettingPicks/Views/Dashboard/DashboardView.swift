@@ -62,8 +62,13 @@ struct DashboardView: View {
                     }
                     filters
                     if bankroll > 0 {
-                        StatTile(title: "Bankroll", value: Format.money(currentBankroll),
-                                 tint: currentBankroll >= bankroll ? .green : .red)
+                        let inPlay = Bankroll.inPlay(bets)
+                        HStack(spacing: 12) {
+                            StatTile(title: "Bankroll", value: Format.money(currentBankroll),
+                                     tint: currentBankroll >= bankroll ? .green : .red)
+                            StatTile(title: "In play", value: Format.money(inPlay))
+                            StatTile(title: "Available", value: Format.money(max(0, currentBankroll - inPlay)))
+                        }
                     }
                     if bets.isEmpty {
                         ContentUnavailableView(

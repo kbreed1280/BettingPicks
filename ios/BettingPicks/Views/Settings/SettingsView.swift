@@ -51,10 +51,13 @@ struct SettingsView: View {
                         ForEach(RiskLevel.allCases) { Text($0.displayName).tag($0.rawValue) }
                     }
                     Toggle("Grow/shrink with my results", isOn: $adjustBankroll)
-                    if bankroll > 0 && adjustBankroll {
-                        LabeledContent("Current bankroll", value: Format.money(Bankroll.current(
-                            starting: bankroll, setAt: Date(timeIntervalSince1970: bankrollSetAt),
-                            adjustWithResults: true, bets: allBets)))
+                    if bankroll > 0 {
+                        let current = Bankroll.current(starting: bankroll, setAt: Date(timeIntervalSince1970: bankrollSetAt),
+                                                       adjustWithResults: adjustBankroll, bets: allBets)
+                        let inPlay = Bankroll.inPlay(allBets)
+                        if adjustBankroll { LabeledContent("Current bankroll", value: Format.money(current)) }
+                        LabeledContent("In play (open bets)", value: Format.money(inPlay))
+                        LabeledContent("Available to bet", value: Format.money(max(0, current - inPlay)))
                     }
                     LabeledContent("Default stake (manual bets)") {
                         TextField("Stake", value: $defaultStake, format: .currency(code: "USD"))
