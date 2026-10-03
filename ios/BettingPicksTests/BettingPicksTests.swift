@@ -203,3 +203,65 @@ final class ImportMatcherTests: XCTestCase {
         XCTAssertEqual(Calendar.current.component(.day, from: ImportMatcher.date("2026-10-03")), 3)
     }
 }
+
+final class LiveBetEvaluatorTests: XCTestCase {
+    private func game(_ away: String, _ home: String, _ a: Int?, _ h: Int?, state: String = "in") -> LiveGameDTO {
+        LiveGameDTO(sportKey: "americanfootball_ncaaf", homeTeam: home, awayTeam: away, homeScore: h, awayScore: a,
+                    state: state, detail: "Q3 5:00", startTime: .now, possession: nil)
+    }
+
+    private lazy var games = [
+        game("Alabama Crimson Tide", "Mississippi State Bulldogs", 24, 17),
+        game("Navy Midshipmen", "Air Force Falcons", 10, 14),
+        game("Michigan Wolverines", "Minnesota Golden Gophers", 20, 10, state: "post"),
+        game("Michigan State Spartans", "Wisconsin Badgers", 7, 21),
+        game("Vanderbilt Commodores", "Georgia Bulldogs", 3, 31),
+        game("Ohio State Buckeyes", "Iowa Hawkeyes", 0, 0, state: "pre"),
+    ]
+
+    private func bet(_ selection: String, _ event: String, _ type: BetType = .spread, legs: [ParlayLeg] = []) -> Bet {
+        Bet(sport: "NCAAF", event: event, betType: type, selection: selection, odds: -110, stake: 10, sportsbook: "FanDuel", legs: legs)
+    }
+
+    func testSpreadWithBoostTextFindsTheRightGame() {
+        let info = LiveBetEvaluator.evaluate(bet("Alabama Crimson Tide -5.5 (25% profit boost)",
+                                                 "Alabama Crimson Tide @ Mississippi State Bulldogs"), games: games)!
+        XCTAssertEqual(info.legs[0].game.homeTeam, "Mississippi State Bulldogs")
+        XCTAssertEqual(info.current, .won) // up 7, covering -5.5
+        XCTAssertNil(info.finalResult)     // still in progress
+    }
+
+    func testUnderdogLosingAndShortName() {
+        let info = LiveBetEvaluator.evaluate(bet("Navy +2.5", "Navy @ Air Force"), games: games)!
+        XCTAssertEqual(info.current, .lost) // down 4 with +2.5
+    }
+
+    func testMichiganNotConfusedWithMichiganState() {
+        let info = LiveBetEvaluator.evaluate(bet("Michigan -6.5", "Michigan @ Minnesota"), games: games)!
+        XCTAssertEqual(info.legs[0].game.homeTeam, "Minnesota Golden Gophers")
+        XCTAssertEqual(info.finalResult, .won) // final 20-10
+    }
+
+    func testParlayLegs() {
+        let legs = [
+            ParlayLeg(selection: "Michigan Wolverines -6.5 (@ Minnesota)", odds: 103),
+            ParlayLeg(selection: "Georgia Bulldogs -25.5 (vs Vanderbilt)", odds: -101),
+            ParlayLeg(selection: "Over 62.5 (Alabama @ Mississippi State)", odds: -101),
+            ParlayLeg(selection: "Ohio State Buckeyes -14.5 (@ Iowa)", odds: 103),
+        ]
+        let info = LiveBetEvaluator.evaluate(bet("4-leg parlay", "parlay", .parlay, legs: legs), games: games)!
+        XCTAssertEqual(info.legs.count, 4)
+        XCTAssertEqual(info.legs[0].status, .won)     // Michigan won by 10
+        XCTAssertEqual(info.legs[1].status, .won)     // Georgia up 28
+        XCTAssertEqual(info.legs[2].status, .lost)    // 41 so far, under 62.5 (not final)
+        XCTAssertEqual(info.legs[3].status, .pending) // not started
+        XCTAssertNil(info.finalResult)                // the losing leg isn't final yet
+    }
+
+    func testMoneylineAndTotals() {
+        let ml = LiveBetEvaluator.evaluate(bet("Wisconsin Badgers ML", "Michigan State @ Wisconsin", .moneyline), games: games)!
+        XCTAssertEqual(ml.current, .won)
+        let under = LiveBetEvaluator.evaluate(bet("Under 43.5", "Michigan Wolverines @ Minnesota Golden Gophers", .total), games: games)!
+        XCTAssertEqual(under.finalResult, .won) // final total 30
+    }
+}

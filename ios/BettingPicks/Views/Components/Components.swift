@@ -92,6 +92,80 @@ struct LiveScoreBar: View {
     }
 }
 
+/// "WINNING" / "LOSING" / "PUSH" while a bet's game is in progress.
+struct LiveStatusBadge: View {
+    let status: BetStatus
+
+    var body: some View {
+        let (text, color): (String, Color) = switch status {
+        case .won: ("WINNING", .green)
+        case .lost: ("LOSING", .red)
+        case .push: ("PUSH", .gray)
+        default: ("LIVE", .orange)
+        }
+        Text(text)
+            .font(.caption2.weight(.heavy))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .foregroundStyle(.white)
+            .background(color, in: Capsule())
+    }
+}
+
+/// Live score lines under a bet: one for a straight bet, one per leg for a parlay.
+struct LiveBetView: View {
+    let info: LiveBetInfo
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if info.isParlay {
+                Text("\(info.winningLegs) of \(info.totalLegs) legs winning")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(info.current == .lost ? .red : .green)
+            }
+            ForEach(Array(info.legs.enumerated()), id: \.offset) { _, leg in
+                HStack(spacing: 4) {
+                    Image(systemName: icon(leg.status))
+                        .foregroundStyle(color(leg.status))
+                    if info.isParlay {
+                        Text(leg.text.components(separatedBy: " (").first ?? leg.text).lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Text(scoreText(leg.game)).monospacedDigit()
+                        .foregroundStyle(leg.game.isLive ? .red : .secondary)
+                }
+                .font(.caption2)
+            }
+        }
+        .padding(6)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func scoreText(_ g: LiveGameDTO) -> String {
+        guard g.state != "pre", let a = g.awayScore, let h = g.homeScore else {
+            return g.startTime.formatted(date: .omitted, time: .shortened)
+        }
+        let short = { (t: String) in t.split(separator: " ").dropLast().joined(separator: " ") }
+        return "\(short(g.awayTeam)) \(a)–\(h) \(short(g.homeTeam)) · \(g.detail)"
+    }
+
+    private func icon(_ s: BetStatus) -> String {
+        switch s {
+        case .won: "checkmark.circle.fill"
+        case .lost: "xmark.circle.fill"
+        case .push: "equal.circle.fill"
+        default: "clock"
+        }
+    }
+
+    private func color(_ s: BetStatus) -> Color {
+        switch s {
+        case .won: .green
+        case .lost: .red
+        default: .secondary
+        }
+    }
+}
+
 extension Double {
     var profitColor: Color { self > 0 ? .green : self < 0 ? .red : .primary }
 }

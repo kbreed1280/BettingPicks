@@ -8,6 +8,7 @@ struct BetListView: View {
     @State private var showingAdd = false
     @State private var showingImport = false
     @State private var deleting: Bet?
+    @Environment(LiveScores.self) private var live
     @State private var search = ""
     @AppStorage("betsMode") private var mode = 0
 
@@ -77,11 +78,35 @@ struct BetListView: View {
                 }
             }
             .searchable(text: $search, prompt: "Team, event, or sport")
+            .task { await trackLive() }
+    }
+
+    /// While open bets exist, refresh live scores and settle bets whose games are final.
+    private func trackLive() async {
+        while !Task.isCancelled {
+            let open = bets.filter { $0.status == .pending }
+            guard !open.isEmpty else { return }
+            let sports = Array(Set(open.flatMap { LiveBetEvaluator.sportKeys(for: $0.sport) }))
+            let today = Calendar.current.startOfDay(for: .now)
+            await live.refresh(sports: sports, days: [Calendar.current.date(byAdding: .day, value: -1, to: today)!, today])
+            for bet in open {
+                if let result = LiveBetEvaluator.evaluate(bet, games: live.games)?.finalResult {
+                    bet.status = result
+                    if !bet.notes.contains("Auto-settled") {
+                        bet.notes = (bet.notes.isEmpty ? "" : bet.notes + " · ") + "Auto-settled from final score"
+                    }
+                }
+            }
+            let anyLive = live.games.contains { $0.isLive }
+            try? await Task.sleep(for: .seconds(anyLive ? 30 : 120))
+        }
     }
 
     private func rows(_ list: [Bet]) -> some View {
         ForEach(list) { bet in
-            Button { editing = bet } label: { BetRow(bet: bet) }
+            Button { editing = bet } label: {
+                BetRow(bet: bet, live: bet.status == .pending ? LiveBetEvaluator.evaluate(bet, games: live.games) : nil)
+            }
                 .buttonStyle(.plain)
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                     Button("Won") { set(bet, .won) }.tint(.green)
@@ -105,6 +130,7 @@ struct BetListView: View {
 
 struct BetRow: View {
     let bet: Bet
+    var live: LiveBetInfo?
 
     var body: some View {
         HStack(alignment: .top) {
@@ -121,10 +147,15 @@ struct BetRow: View {
                 Text(bet.event).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 Text("\(bet.betType.displayName) · \(Format.odds(bet.odds)) · \(bet.sportsbook)")
                     .font(.caption).foregroundStyle(.secondary)
+                if let live, live.anyStarted { LiveBetView(info: live) }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                StatusBadge(status: bet.status)
+                if let live, live.anyStarted, bet.status == .pending {
+                    LiveStatusBadge(status: live.current)
+                } else {
+                    StatusBadge(status: bet.status)
+                }
                 if bet.status == .pending {
                     Text("\(Format.money(bet.stake)) to win \(Format.money(bet.potentialProfit))")
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)

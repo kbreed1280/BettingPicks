@@ -18,6 +18,7 @@
 		4DDC03480E9C99A822283479 /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = A439098B76D2E266C527BA73 /* Stats.swift */; };
 		53B2B593046C6BF3CA75B5E4 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7350EA6E2BB345EDEC590B21 /* Enums.swift */; };
 		55B331F211C5B25959A9A568 /* BetListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B611ADA59E40605190230104 /* BetListView.swift */; };
+		5A1A117BB22A71DFE1069855 /* LiveBetEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7853F29E7180CBEE6AD9151C /* LiveBetEvaluator.swift */; };
 		5D575EB2EAEBBDC2E3B3BC72 /* ImportBetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F5EF682F35EE3DAB9E4CAD /* ImportBetsView.swift */; };
 		62F83A104AB6C1EBBF9C17D2 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24809EE62845A57ECB67C05 /* BreakdownView.swift */; };
 		6311E2867FA6BE281604982D /* BettingMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3E559531CF19EFF65C5D4FF /* BettingMath.swift */; };
@@ -61,6 +62,7 @@
 		6CBCFB4C4CE667D0310B86F8 /* Settlement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settlement.swift; sourceTree = "<group>"; };
 		7350EA6E2BB345EDEC590B21 /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
 		73AE6CE68388988EB6994035 /* BettingPicksTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BettingPicksTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7853F29E7180CBEE6AD9151C /* LiveBetEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBetEvaluator.swift; sourceTree = "<group>"; };
 		7A223EAE7DDF8E087ECB6B99 /* BettingPicksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BettingPicksTests.swift; sourceTree = "<group>"; };
 		8192EC7458AEBB44FD2D6B27 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		82F5EF682F35EE3DAB9E4CAD /* ImportBetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportBetsView.swift; sourceTree = "<group>"; };
@@ -126,6 +128,7 @@
 				42DE529EB9F9DF7DFF1EB74F /* AppSettings.swift */,
 				A3E559531CF19EFF65C5D4FF /* BettingMath.swift */,
 				47B0D47D39CA9D396069BA90 /* CSVExport.swift */,
+				7853F29E7180CBEE6AD9151C /* LiveBetEvaluator.swift */,
 				6CBCFB4C4CE667D0310B86F8 /* Settlement.swift */,
 				86C06E8C22810C4125F1F81B /* StakeSizer.swift */,
 				A439098B76D2E266C527BA73 /* Stats.swift */,
@@ -339,6 +342,7 @@
 				53B2B593046C6BF3CA75B5E4 /* Enums.swift in Sources */,
 				6772EC972835ED1718297DC0 /* GamesView.swift in Sources */,
 				5D575EB2EAEBBDC2E3B3BC72 /* ImportBetsView.swift in Sources */,
+				5A1A117BB22A71DFE1069855 /* LiveBetEvaluator.swift in Sources */,
 				38F0ABC8BF0CE2E80030A5FF /* LiveScores.swift in Sources */,
 				20935C524DC74A93CE1CCF3E /* PickHistoryView.swift in Sources */,
 				0961217C05C303E6B2DC1C73 /* PickStore.swift in Sources */,
