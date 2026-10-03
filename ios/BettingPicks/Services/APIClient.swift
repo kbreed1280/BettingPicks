@@ -69,7 +69,15 @@ enum APIError: LocalizedError {
         switch self {
         case .badURL: "The backend URL in Settings isn't valid."
         case .server(401, _): "The backend rejected the app token. Check Settings → App token."
-        case let .server(code, body): "Backend error \(code): \(body)"
+        case let .server(code, body):
+            // The backend sends {"error": "..."}; show just the message.
+            if let data = body.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = obj["error"] as? String {
+                message
+            } else {
+                "Backend error \(code): \(body)"
+            }
         }
     }
 }

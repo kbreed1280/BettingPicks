@@ -238,7 +238,12 @@ app.post("/import/screenshot", async (req, res) => {
     res.json(await extractBets(image, mediaType));
   } catch (err) {
     console.error("[import] failed:", err);
-    res.status(502).json({ error: (err as Error).message });
+    const msg = (err as Error).message;
+    res.status(502).json({
+      error: msg.includes("credit balance is too low")
+        ? "Out of Anthropic API credits. Reading screenshots costs about 1-2 cents each; add credit at console.anthropic.com → Billing."
+        : msg,
+    });
   }
 });
 
