@@ -59,6 +59,22 @@ final class PickStore {
         errors[key] = "Still analyzing. Check back in a few minutes."
     }
 
+    /// Pulls every day of AI picks from the server's permanent log (including days you never
+    /// opened), then grades finished ones. Keeps the AI's track record complete.
+    func syncHistory(context: ModelContext) async {
+        struct Day: Decodable { let date: String; let sport: String; let league: String; let picks: [PickDTO] }
+        guard let days: [Day] = try? await APIClient().get("/picks/history", query: []) else { return }
+        for (date, group) in Dictionary(grouping: days, by: \.date) {
+            let response = PicksResponse(
+                date: date,
+                sports: group.map { SportSummary(sport: $0.sport, league: $0.league, gameCount: 0, slateNotes: "",
+                                                 generatedAt: "", status: "done", costUSD: nil, error: nil) },
+                picks: group.flatMap(\.picks))
+            try? upsert(response, context: context)
+        }
+        await settle(context: context)
+    }
+
     private func upsert(_ response: PicksResponse, context: ModelContext) throws {
         let date = response.date
         let existing = try context.fetch(FetchDescriptor<AIPick>(predicate: #Predicate { $0.slateDate == date }))

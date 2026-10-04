@@ -4,6 +4,8 @@ import SwiftUI
 struct BetListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Bet.placedAt, order: .reverse) private var bets: [Bet]
+    @Query private var aiPicks: [AIPick]
+    @Environment(PickStore.self) private var pickStore
     @State private var editing: Bet?
     @State private var showingAdd = false
     @State private var showingImport = false
@@ -55,6 +57,17 @@ struct BetListView: View {
 
     private var betsList: some View {
             List {
+                if search.isEmpty && (!aiPicks.isEmpty || !bets.isEmpty) {
+                    Section { AIvsYouCard(picks: aiPicks, bets: bets) }
+                }
+                if bets.isEmpty && !aiPicks.isEmpty {
+                    Section {
+                        Button { showingAdd = true } label: {
+                            Label("No bets logged yet. Tap to add one, or import from FanDuel screenshots.", systemImage: "ticket")
+                                .font(.subheadline)
+                        }
+                    }
+                }
                 let pending = visible.filter { $0.status == .pending }
                 let settled = visible.filter { $0.status != .pending }
                 if !pending.isEmpty {
@@ -65,7 +78,7 @@ struct BetListView: View {
                 }
             }
             .overlay {
-                if bets.isEmpty {
+                if bets.isEmpty && aiPicks.isEmpty {
                     ContentUnavailableView {
                         Label("No bets logged", systemImage: "ticket")
                     } description: {
@@ -73,12 +86,14 @@ struct BetListView: View {
                     } actions: {
                         Button("Add bet") { showingAdd = true }.buttonStyle(.borderedProminent)
                     }
-                } else if visible.isEmpty {
+                } else if visible.isEmpty && !search.isEmpty {
                     ContentUnavailableView.search(text: search)
                 }
             }
             .searchable(text: $search, prompt: "Team, event, or sport")
             .task { await trackLive() }
+            .task { await pickStore.syncHistory(context: context) }
+            .refreshable { await pickStore.syncHistory(context: context) }
     }
 
     /// While open bets exist, refresh live scores and settle bets whose games are final.

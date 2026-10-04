@@ -44,10 +44,12 @@ struct PickHistoryView: View {
         .overlay {
             if picks.isEmpty {
                 ContentUnavailableView("No AI picks yet", systemImage: "clock",
-                                       description: Text("Picks appear here once you load them."))
+                                       description: Text("Every pick Claude makes is logged here automatically and graded when the game ends."))
             }
         }
         .navigationTitle("AI Track Record")
+        .task { await store.syncHistory(context: context) }
+        .refreshable { await store.syncHistory(context: context) }
         .toolbar {
             Button {
                 Task { await store.settle(context: context) }

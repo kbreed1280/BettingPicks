@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { analyzeGames, ModelOutput, scorePicks, type Pick } from "./analyze.ts";
-import { getCached, setCached } from "./cache.ts";
+import { entries, getCached, PICK_KEY, setCached } from "./cache.ts";
 import { extractBets } from "./importer.ts";
 import { fetchLive } from "./live.ts";
 import { fetchGames, fetchScores, SUPPORTED_SPORTS, type GameSummary } from "./odds.ts";
@@ -224,6 +224,17 @@ app.post("/picks/upload", async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: (err as Error).message });
   }
+});
+
+// GET /picks/history?since=YYYY-MM-DD  - every day's final set of AI picks (the AI's track
+// record). Re-running a day replaces that day's picks, so withdrawn picks don't count.
+app.get("/picks/history", (req, res) => {
+  const since = String(req.query.since ?? "0000-00-00");
+  const days = entries<SportPicks>(PICK_KEY)
+    .filter(([key, v]) => key.slice(0, 10) >= since && v.status === "done")
+    .map(([key, v]) => ({ date: key.slice(0, 10), sport: v.sport, league: v.league, picks: v.picks }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  res.json(days);
 });
 
 // Bets inbox: bets read from screenshots in Claude Code (on the user's plan) wait here
